@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useLabels } from '../hooks/useSettings'
 import { Avatar } from './Avatar'
+import { QuickAddFab } from './QuickAddFab'
 
 interface NavItem {
   key: string
@@ -84,6 +85,8 @@ export function AppLayout() {
       <main className="relative z-10 flex-1 overflow-y-auto pb-16 md:pb-0">
         <Outlet />
       </main>
+
+      <QuickAddFab />
 
       {/* Bottom tab bar — mobile */}
       <nav className="fixed right-0 bottom-0 left-0 z-20 flex h-14 flex-shrink-0 items-center justify-around border-t border-line bg-surface md:hidden">

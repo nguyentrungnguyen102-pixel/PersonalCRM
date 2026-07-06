@@ -5,22 +5,19 @@ import { useLabels } from '../hooks/useSettings'
 import { vnNormalize } from '../lib/normalize'
 import type { GroupType } from '../lib/types'
 import { GROUP_COLORS, PersonCard } from '../components/PersonCard'
+import { PersonFormModal } from '../components/PersonFormModal'
 
 const GROUP_TYPES: GroupType[] = ['gia_dinh', 'ban_be', 'doi_tac', 'dong_nghiep', 'con_cai', 'khac']
 
-interface ContactsProps {
-  // TODO(module sau): noi modal "Them lien he" — hien tai chi la stub.
-  onAddPerson?: () => void
-}
-
-export function Contacts({ onAddPerson }: ContactsProps) {
+export function Contacts() {
   const { t } = useLabels()
   const { canEdit } = useAuth()
-  const { persons, loading, error } = usePersons()
+  const { persons, loading, error, refresh } = usePersons()
 
   const [query, setQuery] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<GroupType | null>(null)
   const [favoriteOnly, setFavoriteOnly] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   const vips = useMemo(() => persons.filter((p) => p.is_favorite), [persons])
 
@@ -41,11 +38,6 @@ export function Contacts({ onAddPerson }: ContactsProps) {
     })
   }, [persons, query, selectedGroup, favoriteOnly])
 
-  const handleAddPerson = () => {
-    // TODO(module sau): mo modal them lien he. Hien tai chi la stub.
-    onAddPerson?.()
-  }
-
   return (
     <div className="anim-fi px-5 py-5 md:px-7">
       <div className="mb-4 flex items-end justify-between gap-3">
@@ -56,13 +48,19 @@ export function Contacts({ onAddPerson }: ContactsProps) {
         {canEdit && (
           <button
             type="button"
-            onClick={handleAddPerson}
+            onClick={() => setShowAddModal(true)}
             className="flex-shrink-0 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
           >
             + {t('actions.add_person')}
           </button>
         )}
       </div>
+
+      <PersonFormModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSaved={refresh}
+      />
 
       {vips.length > 0 && (
         <div className="mb-5">

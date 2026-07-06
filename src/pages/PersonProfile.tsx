@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { Badge } from '../components/Badge'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { InteractionFormModal } from '../components/InteractionFormModal'
+import { MediaAddModal } from '../components/MediaAddModal'
 import { GROUP_COLORS } from '../components/PersonCard'
+import { PersonFormModal } from '../components/PersonFormModal'
 import { useAuth } from '../hooks/useAuth'
 import { usePersonDetail } from '../hooks/usePersonDetail'
 import { useLabels, useSettings } from '../hooks/useSettings'
@@ -89,12 +93,19 @@ function LockedBox({ label }: { label: string }) {
 
 export function PersonProfile() {
   const { id } = useParams<{ id: string }>()
-  const { canEdit } = useAuth()
+  const navigate = useNavigate()
+  const { canEdit, role, user } = useAuth()
   const { t } = useLabels()
   const { warningDays } = useSettings()
-  const { person, interactions, media, loading, error } = usePersonDetail(id)
+  const { person, interactions, media, loading, error, refresh } = usePersonDetail(id)
 
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showInteractionModal, setShowInteractionModal] = useState(false)
+  const [showMediaModal, setShowMediaModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -159,6 +170,33 @@ export function PersonProfile() {
   const photos = media.filter((m) => m.type === 'photo')
   const videoLinks = media.filter((m) => m.type === 'video_link' && m.external_url)
 
+  const canDeletePerson = role === 'admin' || (role === 'editor' && person.created_by === user?.id)
+
+  async function handleDeletePerson() {
+    if (!person) return
+    setDeleting(true)
+    setDeleteError(null)
+
+    const photoPaths = media
+      .filter((m) => m.type === 'photo' && m.storage_path)
+      .map((m) => m.storage_path as string)
+
+    if (photoPaths.length > 0) {
+      await supabase.storage.from('media').remove(photoPaths)
+    }
+
+    const { error: delError } = await supabase.from('persons').delete().eq('id', person.id)
+
+    setDeleting(false)
+
+    if (delError) {
+      setDeleteError(delError.message)
+      return
+    }
+
+    navigate('/danh-ba')
+  }
+
   const preferenceEntries = Object.entries(person.preferences ?? {})
   const socialEntries = Object.entries(person.social_links ?? {})
 
@@ -209,15 +247,24 @@ export function PersonProfile() {
             </div>
           </div>
           {canEdit && (
-            <button
-              type="button"
-              onClick={() => {
-                /* TODO(module sau): mo form sua ho so. */
-              }}
-              className="flex-shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:text-ink"
-            >
-              {t('actions.edit')}
-            </button>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(true)}
+                className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:text-ink"
+              >
+                {t('actions.edit')}
+              </button>
+              {canDeletePerson && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="rounded-lg border border-rose/30 px-3 py-1.5 text-xs font-medium text-rose transition-colors hover:bg-rose/10"
+                >
+                  {t('actions.delete')}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -282,9 +329,7 @@ export function PersonProfile() {
               {canEdit && (
                 <button
                   type="button"
-                  onClick={() => {
-                    /* TODO(module sau): mo form them tuong tac. */
-                  }}
+                  onClick={() => setShowInteractionModal(true)}
                   className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary"
                 >
                   + {t('actions.add_interaction')}
@@ -333,8 +378,19 @@ export function PersonProfile() {
           </div>
 
           <div>
-            <div className="mb-2.5 text-[10px] font-semibold tracking-[1.2px] text-muted uppercase">
-              {t('person.gallery')}
+            <div className="mb-2.5 flex items-center justify-between">
+              <div className="text-[10px] font-semibold tracking-[1.2px] text-muted uppercase">
+                {t('person.gallery')}
+              </div>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setShowMediaModal(true)}
+                  className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary"
+                >
+                  + {t('person.gallery')}
+                </button>
+              )}
             </div>
 
             {photos.length === 0 && videoLinks.length === 0 && (
@@ -495,6 +551,38 @@ export function PersonProfile() {
           )}
         </aside>
       </div>
+
+      <PersonFormModal
+        open={showEditModal}
+        person={person}
+        onClose={() => setShowEditModal(false)}
+        onSaved={refresh}
+      />
+
+      <InteractionFormModal
+        open={showInteractionModal}
+        personId={person.id}
+        onClose={() => setShowInteractionModal(false)}
+        onSaved={refresh}
+      />
+
+      <MediaAddModal
+        open={showMediaModal}
+        personId={person.id}
+        onClose={() => setShowMediaModal(false)}
+        onSaved={refresh}
+      />
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        loading={deleting}
+        error={deleteError}
+        onConfirm={() => void handleDeletePerson()}
+        onCancel={() => {
+          setShowDeleteConfirm(false)
+          setDeleteError(null)
+        }}
+      />
     </div>
   )
 }
