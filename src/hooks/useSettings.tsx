@@ -24,6 +24,7 @@ interface SettingsContextValue {
   warningDays: number
   loading: boolean
   t: (path: string) => string
+  refresh: () => Promise<void>
 }
 
 const SettingsContext = createContext<SettingsContextValue | undefined>(undefined)
@@ -60,6 +61,30 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // can nhan tieng Viet); dang nhap xong load lai mot lan cho chac.
   const settingsKey = userId ?? 'anon'
 
+  const applyRows = useCallback((data: { key: string; value: unknown }[]) => {
+    for (const row of data) {
+      switch (row.key) {
+        case 'labels':
+          setLabels((row.value as LabelTree) ?? {})
+          break
+        case 'group_defaults':
+          setGroupDefaults((row.value as Record<GroupType, number>) ?? DEFAULT_GROUP_DEFAULTS)
+          break
+        case 'interaction_types':
+          setInteractionTypes((row.value as InteractionTypeOption[]) ?? [])
+          break
+        case 'video_domains':
+          setVideoDomains((row.value as string[]) ?? [])
+          break
+        case 'warning_days':
+          setWarningDays(typeof row.value === 'number' ? row.value : DEFAULT_WARNING_DAYS)
+          break
+        default:
+          break
+      }
+    }
+  }, [])
+
   useEffect(() => {
     if (loadedForUser === settingsKey) return
 
@@ -71,31 +96,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       .select('key, value')
       .then(({ data, error }) => {
         if (!active) return
-        if (!error && data) {
-          for (const row of data as { key: string; value: unknown }[]) {
-            switch (row.key) {
-              case 'labels':
-                setLabels((row.value as LabelTree) ?? {})
-                break
-              case 'group_defaults':
-                setGroupDefaults(
-                  (row.value as Record<GroupType, number>) ?? DEFAULT_GROUP_DEFAULTS,
-                )
-                break
-              case 'interaction_types':
-                setInteractionTypes((row.value as InteractionTypeOption[]) ?? [])
-                break
-              case 'video_domains':
-                setVideoDomains((row.value as string[]) ?? [])
-                break
-              case 'warning_days':
-                setWarningDays(typeof row.value === 'number' ? row.value : DEFAULT_WARNING_DAYS)
-                break
-              default:
-                break
-            }
-          }
-        }
+        if (!error && data) applyRows(data as { key: string; value: unknown }[])
         setLoadedForUser(settingsKey)
         setLoading(false)
       })
@@ -103,13 +104,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false
     }
-  }, [settingsKey, loadedForUser])
+  }, [settingsKey, loadedForUser, applyRows])
+
+  // Refetch thu cong toan bo app_settings — dung sau khi trang Cai dat ghi de
+  // du lieu de UI phan anh hieu lac ngay ma khong can reload trang.
+  const refresh = useCallback(async () => {
+    const { data, error } = await supabase.from('app_settings').select('key, value')
+    if (!error && data) applyRows(data as { key: string; value: unknown }[])
+  }, [applyRows])
 
   const t = useCallback((path: string) => getByPath(labels, path) ?? fallbackFromPath(path), [labels])
 
   const value = useMemo<SettingsContextValue>(
-    () => ({ labels, groupDefaults, interactionTypes, videoDomains, warningDays, loading, t }),
-    [labels, groupDefaults, interactionTypes, videoDomains, warningDays, loading, t],
+    () => ({ labels, groupDefaults, interactionTypes, videoDomains, warningDays, loading, t, refresh }),
+    [labels, groupDefaults, interactionTypes, videoDomains, warningDays, loading, t, refresh],
   )
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>

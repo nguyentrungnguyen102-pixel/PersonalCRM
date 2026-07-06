@@ -12,6 +12,7 @@ import { Login } from './pages/Login'
 import { Placeholder } from './pages/Placeholder'
 import { PersonProfile } from './pages/PersonProfile'
 import { Reminders } from './pages/Reminders'
+import { Settings } from './pages/Settings'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -27,6 +28,26 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
   if (!session) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
+  }
+
+  return <>{children}</>
+}
+
+// Trang Cai dat chi danh cho admin — editor/viewer go thang URL se bi day ve
+// trang chu (RLS backend da chan ghi san, day la lop bao ve UI).
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const { role, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+      </div>
+    )
+  }
+
+  if (role !== 'admin') {
+    return <Navigate to="/" replace />
   }
 
   return <>{children}</>
@@ -49,7 +70,14 @@ function AppRoutes() {
         <Route path="/so-do" element={<Placeholder titleKey="nav.map" />} />
         <Route path="/nhac-nho" element={<Reminders />} />
         <Route path="/nhom" element={<Groups />} />
-        <Route path="/cai-dat" element={<Placeholder titleKey="nav.settings" />} />
+        <Route
+          path="/cai-dat"
+          element={
+            <RequireAdmin>
+              <Settings />
+            </RequireAdmin>
+          }
+        />
         <Route path="/nguoi/:id" element={<PersonProfile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

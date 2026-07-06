@@ -90,6 +90,9 @@ export interface InteractionTypeOption {
   value: string
   label: string
   enabled: boolean
+  // Loai tuong tac them tu man Cai dat, KHONG co trong enum public.interaction_type
+  // cua DB — chi dung de hien thi/loc phia UI, khong duoc chon khi ghi interactions.
+  custom?: boolean
 }
 
 export interface AppSettings {
