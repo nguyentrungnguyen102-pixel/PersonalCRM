@@ -109,6 +109,11 @@ values (
     "auth": {
       "email": "Email",
       "password": "Mật khẩu",
+      "email_placeholder": "ban@email.com",
+      "password_placeholder": "••••••••",
+      "login_button": "Đăng nhập",
+      "signing_in": "Đang đăng nhập...",
+      "subtitle": "Đăng nhập để tiếp tục",
       "wrong_credentials": "Email hoặc mật khẩu không đúng",
       "welcome": "Chào mừng trở lại"
     },

@@ -126,12 +126,14 @@ create policy admin_xoa_profiles
 
 -- ---------------------------------------------------------------------
 -- POLICIES: app_settings
--- Moi nguoi da dang nhap doc duoc; chi admin duoc ghi/sua/xoa
+-- Ai cung doc duoc (ke ca anon — man Login can nhan tieng Viet truoc khi
+-- dang nhap; bang nay chi chua nhan UI + thong so chung, khong co du lieu
+-- ca nhan). Chi admin duoc ghi/sua/xoa.
 -- ---------------------------------------------------------------------
-create policy nguoi_dang_nhap_doc_app_settings
+create policy moi_nguoi_doc_app_settings
   on public.app_settings for select
-  to authenticated
-  using (auth.uid() is not null);
+  to anon, authenticated
+  using (true);
 
 create policy admin_them_app_settings
   on public.app_settings for insert

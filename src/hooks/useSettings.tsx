@@ -56,12 +56,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [loadedForUser, setLoadedForUser] = useState<string | null>(null)
 
+  // Load ca khi chua dang nhap (policy cho anon doc app_settings — man Login
+  // can nhan tieng Viet); dang nhap xong load lai mot lan cho chac.
+  const settingsKey = userId ?? 'anon'
+
   useEffect(() => {
-    if (!userId) {
-      setLoading(false)
-      return
-    }
-    if (loadedForUser === userId) return
+    if (loadedForUser === settingsKey) return
 
     let active = true
     setLoading(true)
@@ -96,14 +96,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             }
           }
         }
-        setLoadedForUser(userId)
+        setLoadedForUser(settingsKey)
         setLoading(false)
       })
 
     return () => {
       active = false
     }
-  }, [userId, loadedForUser])
+  }, [settingsKey, loadedForUser])
 
   const t = useCallback((path: string) => getByPath(labels, path) ?? fallbackFromPath(path), [labels])
 
