@@ -6,18 +6,34 @@ import { vnNormalize } from '../lib/normalize'
 import type { GroupType } from '../lib/types'
 import { GROUP_COLORS, PersonCard } from '../components/PersonCard'
 import { PersonFormModal } from '../components/PersonFormModal'
+import { ContactsTable } from '../components/ContactsTable'
 
 const GROUP_TYPES: GroupType[] = ['gia_dinh', 'ban_be', 'doi_tac', 'dong_nghiep', 'con_cai', 'khac']
+const VIEW_MODE_KEY = 'personalcrm.contacts.view_mode'
+
+type ViewMode = 'card' | 'table'
+
+function loadViewMode(): ViewMode {
+  if (typeof window === 'undefined') return 'card'
+  const saved = window.localStorage.getItem(VIEW_MODE_KEY)
+  return saved === 'table' ? 'table' : 'card'
+}
 
 export function Contacts() {
   const { t } = useLabels()
-  const { canEdit } = useAuth()
+  const { canEdit, isAdmin } = useAuth()
   const { persons, loading, error, refresh } = usePersons()
 
   const [query, setQuery] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<GroupType | null>(null)
   const [favoriteOnly, setFavoriteOnly] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
+
+  function changeViewMode(mode: ViewMode) {
+    setViewMode(mode)
+    window.localStorage.setItem(VIEW_MODE_KEY, mode)
+  }
 
   const vips = useMemo(() => persons.filter((p) => p.is_favorite), [persons])
 
@@ -62,7 +78,7 @@ export function Contacts() {
         onSaved={refresh}
       />
 
-      {vips.length > 0 && (
+      {viewMode === 'card' && vips.length > 0 && (
         <div className="mb-5">
           <div className="mb-2 text-[10px] font-semibold tracking-[1.2px] text-primary uppercase">
             ⭐ {t('person.favorite')}
@@ -98,6 +114,26 @@ export function Contacts() {
         >
           ⭐ {t('person.favorite')}
         </button>
+        <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-line">
+          <button
+            type="button"
+            onClick={() => changeViewMode('card')}
+            className={`px-2.5 py-2 text-xs font-medium transition-colors ${
+              viewMode === 'card' ? 'bg-primary/15 text-primary' : 'bg-card text-muted hover:text-ink'
+            }`}
+          >
+            ⊞ {t('table.view_card')}
+          </button>
+          <button
+            type="button"
+            onClick={() => changeViewMode('table')}
+            className={`border-l border-line px-2.5 py-2 text-xs font-medium transition-colors ${
+              viewMode === 'table' ? 'bg-primary/15 text-primary' : 'bg-card text-muted hover:text-ink'
+            }`}
+          >
+            ☰ {t('table.view_table')}
+          </button>
+        </div>
       </div>
 
       <div className="mb-5 flex flex-wrap gap-1.5">
@@ -142,18 +178,22 @@ export function Contacts() {
         </div>
       )}
 
-      {!loading && !error && persons.length > 0 && filtered.length === 0 && (
+      {!loading && !error && persons.length > 0 && viewMode === 'card' && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-1.5 py-16 text-center">
           <p className="text-sm text-muted">{t('empty.no_results')}</p>
         </div>
       )}
 
-      {!loading && !error && filtered.length > 0 && (
+      {!loading && !error && viewMode === 'card' && filtered.length > 0 && (
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((person) => (
             <PersonCard key={person.id} person={person} />
           ))}
         </div>
+      )}
+
+      {!loading && !error && persons.length > 0 && viewMode === 'table' && (
+        <ContactsTable persons={filtered} refresh={refresh} canEdit={canEdit} isAdmin={isAdmin} />
       )}
     </div>
   )
