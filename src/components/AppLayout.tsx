@@ -10,11 +10,13 @@ interface NavItem {
   path: string
   primary: boolean
   end?: boolean
+  editOnly?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
   { key: 'dashboard', path: '/', primary: true, end: true },
   { key: 'contacts', path: '/danh-ba', primary: true },
+  { key: 'import', path: '/nhap-danh-ba', primary: false, editOnly: true },
   { key: 'map', path: '/so-do', primary: false },
   { key: 'reminders', path: '/nhac-nho', primary: true },
   { key: 'groups', path: '/nhom', primary: false },
@@ -23,12 +25,13 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppLayout() {
   const { t } = useLabels()
-  const { profile, user, signOut } = useAuth()
+  const { profile, user, signOut, canEdit } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const displayName = profile?.display_name || user?.email || '?'
-  const primaryItems = NAV_ITEMS.filter((item) => item.primary)
-  const moreItems = NAV_ITEMS.filter((item) => !item.primary)
+  const visibleItems = NAV_ITEMS.filter((item) => !item.editOnly || canEdit)
+  const primaryItems = visibleItems.filter((item) => item.primary)
+  const moreItems = visibleItems.filter((item) => !item.primary)
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-bg text-ink">
@@ -52,7 +55,7 @@ export function AppLayout() {
           <span className="text-primary">Personal</span>CRM
         </div>
         <div className="hidden items-center gap-0.5 md:flex">
-          {NAV_ITEMS.map((item) => (
+          {visibleItems.map((item) => (
             <NavLink
               key={item.key}
               to={item.path}
