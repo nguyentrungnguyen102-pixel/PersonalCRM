@@ -1,4 +1,4 @@
-# QuanHe360 — Personal CRM
+# PersonalCRM
 
 Hệ thống quản lý mối quan hệ cá nhân (gia đình, bạn bè, đối tác, đồng nghiệp, con cái) chạy web.
 

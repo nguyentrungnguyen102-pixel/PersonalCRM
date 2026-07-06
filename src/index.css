@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* Bảng màu QuanHe360 — chuẩn thẩm mỹ Phụ lục B.1 */
+/* Bảng màu PersonalCRM — chuẩn thẩm mỹ Phụ lục B.1 */
 @theme {
   --color-bg: #080407;
   --color-surface: rgba(18, 9, 6, 0.98);

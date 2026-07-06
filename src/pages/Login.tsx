@@ -57,7 +57,7 @@ export function Login() {
       <div className="anim-fi relative z-10 w-full max-w-[380px] rounded-[13px] border border-line bg-card p-8 backdrop-blur-xl">
         <div className="mb-7 text-center">
           <div className="mb-1.5 font-heading text-2xl font-bold">
-            <span className="text-primary">Quan</span>He360
+            <span className="text-primary">Personal</span>CRM
           </div>
           <p className="text-xs text-muted">{t('auth.subtitle')}</p>
         </div>

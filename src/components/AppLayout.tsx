@@ -49,7 +49,7 @@ export function AppLayout() {
       {/* Top nav */}
       <nav className="relative z-20 flex h-[54px] flex-shrink-0 items-center gap-0.5 border-b border-line bg-surface px-5 backdrop-blur-xl">
         <div className="mr-5 flex-shrink-0 font-heading text-xs font-bold tracking-[1.5px] uppercase">
-          <span className="text-primary">Quan</span>He360
+          <span className="text-primary">Personal</span>CRM
         </div>
         <div className="hidden items-center gap-0.5 md:flex">
           {NAV_ITEMS.map((item) => (
