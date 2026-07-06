@@ -1,0 +1,28 @@
+# Dependencies & build
+node_modules
+dist
+dist-ssr
+*.local
+
+# Secrets — TUYỆT ĐỐI không commit
+.env
+.env.*
+!.env.example
+
+# Dữ liệu cá nhân
+*.csv
+
+# Supabase
+supabase/.temp
+supabase/.branches
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
