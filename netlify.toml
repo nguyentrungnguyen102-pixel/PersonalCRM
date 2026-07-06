@@ -2,6 +2,13 @@
   command = "npm run build"
   publish = "dist"
 
+# Biến build-time cho Vite. Anon key là key CÔNG KHAI (luôn nằm trong bundle
+# JS phía client) — bảo mật thật nằm ở RLS. Secret thật (service_role, access
+# token) tuyệt đối không đưa vào repo.
+[build.environment]
+  VITE_SUPABASE_URL = "https://yzlpegtomgtdiwvuvftw.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bHBlZ3RvbWd0ZGl3dnV2ZnR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMjEzMDMsImV4cCI6MjA5ODg5NzMwM30.3Io_FD3IDCylnfuXqHEehrrstvfCdFHEPCRRltxv5VU"
+
 # SPA: mọi route trả về index.html
 [[redirects]]
   from = "/*"
