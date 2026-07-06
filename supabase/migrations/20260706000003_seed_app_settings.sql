@@ -40,7 +40,8 @@ values (
       "map": "Sơ đồ",
       "reminders": "Nhắc nhở",
       "groups": "Nhóm",
-      "settings": "Cài đặt"
+      "settings": "Cài đặt",
+      "menu": "Menu"
     },
     "dashboard": {
       "greeting": "Xin chào",
