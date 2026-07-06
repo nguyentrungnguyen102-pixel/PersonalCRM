@@ -3,8 +3,10 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { SettingsProvider } from './hooks/useSettings'
 import { AppLayout } from './components/AppLayout'
+import { Contacts } from './pages/Contacts'
 import { Login } from './pages/Login'
 import { Placeholder } from './pages/Placeholder'
+import { PersonProfile } from './pages/PersonProfile'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -37,12 +39,12 @@ function AppRoutes() {
         }
       >
         <Route path="/" element={<Placeholder titleKey="nav.dashboard" />} />
-        <Route path="/danh-ba" element={<Placeholder titleKey="nav.contacts" />} />
+        <Route path="/danh-ba" element={<Contacts />} />
         <Route path="/so-do" element={<Placeholder titleKey="nav.map" />} />
         <Route path="/nhac-nho" element={<Placeholder titleKey="nav.reminders" />} />
         <Route path="/nhom" element={<Placeholder titleKey="nav.groups" />} />
         <Route path="/cai-dat" element={<Placeholder titleKey="nav.settings" />} />
-        <Route path="/nguoi/:id" element={<Placeholder titleKey="person.profile" />} />
+        <Route path="/nguoi/:id" element={<PersonProfile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
