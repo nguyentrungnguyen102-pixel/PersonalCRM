@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { Badge } from '../components/Badge'
 import { GROUP_COLORS } from '../components/PersonCard'
+import { TasksPanel } from '../components/TasksPanel'
 import { usePersons } from '../hooks/usePersons'
 import { useLabels, useSettings } from '../hooks/useSettings'
 import { displayName } from '../lib/displayName'
@@ -45,6 +46,10 @@ export function Reminders() {
       <div className="mb-4">
         <h1 className="font-heading text-2xl font-bold tracking-tight">{t('nav.reminders')}</h1>
         <p className="mt-0.5 font-mono text-xs text-muted">{list.length}</p>
+      </div>
+
+      <div className="mb-5">
+        <TasksPanel />
       </div>
 
       {loading && (

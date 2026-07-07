@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { Badge } from '../components/Badge'
 import { GROUP_COLORS } from '../components/PersonCard'
+import { TasksPanel } from '../components/TasksPanel'
 import { useAuth } from '../hooks/useAuth'
 import { usePersons } from '../hooks/usePersons'
 import { useLabels, useSettings } from '../hooks/useSettings'
@@ -279,6 +280,8 @@ export function Dashboard() {
                   )}
                 </div>
               </div>
+
+              <TasksPanel compact />
 
               <div>
                 <div className="mb-2 text-[10px] font-semibold tracking-[1.2px] text-muted uppercase">

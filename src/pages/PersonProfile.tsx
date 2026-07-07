@@ -8,6 +8,7 @@ import { MediaAddModal } from '../components/MediaAddModal'
 import { GROUP_COLORS } from '../components/PersonCard'
 import { PersonFormModal } from '../components/PersonFormModal'
 import { RelationsPanel } from '../components/RelationsPanel'
+import { TasksPanel } from '../components/TasksPanel'
 import { useAuth } from '../hooks/useAuth'
 import { usePersonDetail } from '../hooks/usePersonDetail'
 import { useLabels, useSettings } from '../hooks/useSettings'
@@ -506,6 +507,8 @@ export function PersonProfile() {
           </div>
 
           <RelationsPanel personId={person.id} personName={displayName} />
+
+          <TasksPanel personId={person.id} />
 
           {socialEntries.length > 0 && (
             <div className="rounded-lg border border-line bg-card px-3 py-3">

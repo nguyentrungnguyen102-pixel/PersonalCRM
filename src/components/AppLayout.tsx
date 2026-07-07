@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useInboxCount } from '../hooks/useInboxCount'
 import { useLabels } from '../hooks/useSettings'
 import { Avatar } from './Avatar'
 import { QuickAddFab } from './QuickAddFab'
@@ -20,13 +21,24 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'map', path: '/so-do', primary: false },
   { key: 'reminders', path: '/nhac-nho', primary: true },
   { key: 'groups', path: '/nhom', primary: false },
+  { key: 'inbox', path: '/hop-thu', primary: false, editOnly: true },
   { key: 'settings', path: '/cai-dat', primary: false },
 ]
+
+function InboxBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <span className="ml-1 inline-flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-rose px-1 text-[9px] font-bold text-white">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
 
 export function AppLayout() {
   const { t } = useLabels()
   const { profile, user, signOut, canEdit } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const inboxCount = useInboxCount()
 
   const displayName = profile?.display_name || user?.email || '?'
   const visibleItems = NAV_ITEMS.filter((item) => !item.editOnly || canEdit)
@@ -69,6 +81,7 @@ export function AppLayout() {
               }
             >
               {t(`nav.${item.key}`)}
+              {item.key === 'inbox' && <InboxBadge count={inboxCount} />}
             </NavLink>
           ))}
         </div>
@@ -142,6 +155,7 @@ export function AppLayout() {
                   }
                 >
                   {t(`nav.${item.key}`)}
+                  {item.key === 'inbox' && <InboxBadge count={inboxCount} />}
                 </NavLink>
               ))}
             </div>

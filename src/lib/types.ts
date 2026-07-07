@@ -107,3 +107,32 @@ export interface LastContacted {
   person_id: string
   last_contacted: string | null
 }
+
+export type InboxSource = 'telegram' | 'cuoc_goi' | 'khac'
+export type InboxStatus = 'pending' | 'assigned' | 'dismissed'
+
+// Tin nhan/du lieu vao (bot Telegram, webhook cuoc goi...) chua gan duoc
+// nguoi trong danh ba — hien o trang Hop thu cho.
+export interface InboxItem {
+  id: string
+  source: InboxSource
+  raw_text: string
+  suggested_person_id: string | null
+  status: InboxStatus
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+// Viec can lam / follow-up, co the gan voi 1 person (person_id) hoac viec
+// chung (person_id = null).
+export interface Task {
+  id: string
+  person_id: string | null
+  title: string
+  note: string | null
+  due_date: string | null
+  done: boolean
+  done_at: string | null
+  created_by: string | null
+  created_at: string
+}

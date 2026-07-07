@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Diagram } from './pages/Diagram'
 import { Groups } from './pages/Groups'
 import { ImportCsv } from './pages/ImportCsv'
+import { Inbox } from './pages/Inbox'
 import { Login } from './pages/Login'
 import { NameSuggestions } from './pages/NameSuggestions'
 import { PersonProfile } from './pages/PersonProfile'
@@ -72,6 +73,7 @@ function AppRoutes() {
         <Route path="/so-do" element={<Diagram />} />
         <Route path="/nhac-nho" element={<Reminders />} />
         <Route path="/nhom" element={<Groups />} />
+        <Route path="/hop-thu" element={<Inbox />} />
         <Route
           path="/cai-dat"
           element={
