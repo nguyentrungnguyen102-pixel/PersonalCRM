@@ -12,6 +12,8 @@ import { SectionVideoDomains } from '../components/settings/SectionVideoDomains'
 import { SectionWarningDays } from '../components/settings/SectionWarningDays'
 import { SectionTags } from '../components/settings/SectionTags'
 import { SectionUsers } from '../components/settings/SectionUsers'
+import { SectionConnections } from '../components/settings/SectionConnections'
+import { SectionBackup } from '../components/settings/SectionBackup'
 import { SectionPassword } from '../components/settings/SectionPassword'
 
 type SectionId =
@@ -22,6 +24,8 @@ type SectionId =
   | 'warning_days'
   | 'tags'
   | 'users'
+  | 'connections'
+  | 'backup'
   | 'password'
 
 const SECTION_IDS: SectionId[] = [
@@ -32,13 +36,18 @@ const SECTION_IDS: SectionId[] = [
   'warning_days',
   'tags',
   'users',
+  'connections',
+  'backup',
   'password',
 ]
 
-// "tags" dung nhan tags.title (da co san — "The") thay vi settings.tags
-// (chua duoc seed) de tranh phai them migration moi cho 1 nhan sidebar.
+// "tags"/"connections"/"backup" dung nhan co san (tags.title/bot.title/
+// backup.title) thay vi settings.* (chua duoc seed) de tranh phai them
+// migration moi chi cho 1 nhan sidebar.
 const NAV_LABEL_OVERRIDE: Partial<Record<SectionId, string>> = {
   tags: 'tags.title',
+  connections: 'bot.title',
+  backup: 'backup.title',
 }
 
 type ToastMsg = { kind: 'success' | 'error'; text: string } | null
@@ -121,6 +130,10 @@ export function Settings() {
         return <SectionTags showToast={showToast} />
       case 'users':
         return <SectionUsers showToast={showToast} />
+      case 'connections':
+        return <SectionConnections showToast={showToast} />
+      case 'backup':
+        return <SectionBackup showToast={showToast} />
       case 'password':
         return <SectionPassword showToast={showToast} onDirtyChange={(d) => setSectionDirty('password', d)} />
       default:
