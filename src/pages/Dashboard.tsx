@@ -9,6 +9,7 @@ import { GROUP_COLORS } from '../components/PersonCard'
 import { useAuth } from '../hooks/useAuth'
 import { usePersons } from '../hooks/usePersons'
 import { useLabels, useSettings } from '../hooks/useSettings'
+import { displayName as personDisplayName } from '../lib/displayName'
 import { keepInTouch } from '../lib/keepInTouch'
 import { supabase } from '../lib/supabase'
 import type { GroupType, InteractionType } from '../lib/types'
@@ -155,9 +156,9 @@ export function Dashboard() {
                     style={{ borderColor: `${URGENCY_HEX[status.color] ?? '#78716c'}40` }}
                     className="flex min-w-[190px] flex-shrink-0 items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:opacity-90"
                   >
-                    <Avatar name={person.full_name} avatarUrl={person.avatar_url} size={34} />
+                    <Avatar name={personDisplayName(person)} avatarUrl={person.avatar_url} size={34} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-semibold text-ink">{person.full_name}</div>
+                      <div className="truncate text-xs font-semibold text-ink">{personDisplayName(person)}</div>
                       <Badge result={status} className="mt-0.5" />
                     </div>
                   </button>
@@ -229,10 +230,10 @@ export function Dashboard() {
                       onClick={() => navigate(`/nguoi/${item.person_id}`)}
                       className="flex gap-2.5 border-b border-line pb-3 text-left last:border-b-0 last:pb-0"
                     >
-                      <Avatar name={p?.full_name ?? '?'} avatarUrl={p?.avatar_url} size={34} />
+                      <Avatar name={p ? personDisplayName(p) : '?'} avatarUrl={p?.avatar_url} size={34} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-semibold text-ink">
-                          {p?.full_name ?? '—'}
+                          {p ? personDisplayName(p) : '—'}
                         </div>
                         {(item.note || item.title) && (
                           <div className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted">
@@ -267,7 +268,7 @@ export function Dashboard() {
                       className="flex items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-1.5 text-left"
                     >
                       <span aria-hidden>🎂</span>
-                      <span className="min-w-0 flex-1 truncate text-[11px] text-ink">{person.full_name}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-ink">{personDisplayName(person)}</span>
                       <span className="font-mono text-[10px] text-muted">
                         {String(day).padStart(2, '0')}/{String(month).padStart(2, '0')}
                       </span>
@@ -291,8 +292,8 @@ export function Dashboard() {
                       onClick={() => navigate(`/nguoi/${person.id}`)}
                       className="flex items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-1.5 text-left"
                     >
-                      <Avatar name={person.full_name} avatarUrl={person.avatar_url} size={24} />
-                      <span className="min-w-0 flex-1 truncate text-[11px] text-ink">{person.full_name}</span>
+                      <Avatar name={personDisplayName(person)} avatarUrl={person.avatar_url} size={24} />
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-ink">{personDisplayName(person)}</span>
                     </button>
                   ))}
                   {favorites.length === 0 && <p className="text-xs text-muted">{t('empty.no_results')}</p>}

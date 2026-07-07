@@ -169,7 +169,7 @@ export function PersonFormModal({ open, person, onClose, onSaved }: PersonFormMo
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!form.full_name.trim()) {
+    if (!form.nickname.trim()) {
       setError(t('person.info'))
       return
     }
@@ -188,9 +188,14 @@ export function PersonFormModal({ open, person, onClose, onSaved }: PersonFormMo
     if (form.linkedin.trim()) social_links.linkedin = form.linkedin.trim()
     if (form.instagram.trim()) social_links.instagram = form.instagram.trim()
 
+    // full_name khong duoc null trong DB — neu bo trong o "Ten day du" thi
+    // dung lai gia tri "Ten danh ba" (nickname) lam full_name.
+    const nicknameTrimmed = form.nickname.trim()
+    const fullNameTrimmed = form.full_name.trim() || nicknameTrimmed
+
     const payload = {
-      full_name: form.full_name.trim(),
-      nickname: form.nickname.trim() || null,
+      full_name: fullNameTrimmed,
+      nickname: nicknameTrimmed,
       group_type: form.group_type,
       phone: form.phone.trim() || null,
       email: form.email.trim() || null,
@@ -230,21 +235,22 @@ export function PersonFormModal({ open, person, onClose, onSaved }: PersonFormMo
     <Modal open={open} onClose={onClose} title={isEdit ? t('actions.edit') : t('actions.add_person')} maxWidthClass="md:max-w-2xl">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label={`${t('person.full_name')} *`} full>
-            <input
-              value={form.full_name}
-              onChange={(e) => update('full_name', e.target.value)}
-              required
-              className={INPUT_CLASS}
-              placeholder={t('person.full_name')}
-            />
-          </Field>
-
-          <Field label={t('person.nickname')}>
+          <Field label={`${t('person.contact_name')} *`} full>
             <input
               value={form.nickname}
               onChange={(e) => update('nickname', e.target.value)}
+              required
               className={INPUT_CLASS}
+              placeholder={t('person.contact_name')}
+            />
+          </Field>
+
+          <Field label={t('person.full_name_label')}>
+            <input
+              value={form.full_name}
+              onChange={(e) => update('full_name', e.target.value)}
+              className={INPUT_CLASS}
+              placeholder={t('person.full_name_label')}
             />
           </Field>
 

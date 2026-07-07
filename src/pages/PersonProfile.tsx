@@ -7,9 +7,11 @@ import { InteractionFormModal } from '../components/InteractionFormModal'
 import { MediaAddModal } from '../components/MediaAddModal'
 import { GROUP_COLORS } from '../components/PersonCard'
 import { PersonFormModal } from '../components/PersonFormModal'
+import { RelationsPanel } from '../components/RelationsPanel'
 import { useAuth } from '../hooks/useAuth'
 import { usePersonDetail } from '../hooks/usePersonDetail'
 import { useLabels, useSettings } from '../hooks/useSettings'
+import { displayName as personDisplayName } from '../lib/displayName'
 import { keepInTouch } from '../lib/keepInTouch'
 import { supabase } from '../lib/supabase'
 import type { InteractionType, Media } from '../lib/types'
@@ -159,6 +161,11 @@ export function PersonProfile() {
     )
   }
 
+  // Uu tien hien thi ten danh ba (nickname); neu ten day du khac ten danh ba
+  // thi hien them dong phu nho phia duoi (thay vi nguoc lai nhu truoc).
+  const displayName = personDisplayName(person)
+  const showFullNameSubline = !!person.nickname?.trim() && person.full_name !== displayName
+
   const color = GROUP_COLORS[person.group_type]
   const status = keepInTouch({
     lastContacted: person.last_contacted,
@@ -219,15 +226,15 @@ export function PersonProfile() {
           style={{ background: `radial-gradient(circle, ${color}18, transparent 70%)` }}
         />
         <div className="flex flex-wrap items-start gap-4">
-          <Avatar name={person.full_name} avatarUrl={person.avatar_url} size={64} />
+          <Avatar name={displayName} avatarUrl={person.avatar_url} size={64} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-heading text-xl font-bold tracking-tight text-ink">
-                {person.full_name}
+                {displayName}
               </h1>
               {person.is_favorite && <span aria-hidden>⭐</span>}
             </div>
-            {person.nickname && <p className="mt-0.5 text-xs text-muted">{person.nickname}</p>}
+            {showFullNameSubline && <p className="mt-0.5 text-xs text-muted">{person.full_name}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span
                 className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
@@ -497,6 +504,8 @@ export function PersonProfile() {
               </div>
             )}
           </div>
+
+          <RelationsPanel personId={person.id} personName={displayName} />
 
           {socialEntries.length > 0 && (
             <div className="rounded-lg border border-line bg-card px-3 py-3">

@@ -10,6 +10,7 @@ import { SectionGroupDefaults } from '../components/settings/SectionGroupDefault
 import { SectionInteractionTypes } from '../components/settings/SectionInteractionTypes'
 import { SectionVideoDomains } from '../components/settings/SectionVideoDomains'
 import { SectionWarningDays } from '../components/settings/SectionWarningDays'
+import { SectionTags } from '../components/settings/SectionTags'
 import { SectionUsers } from '../components/settings/SectionUsers'
 import { SectionPassword } from '../components/settings/SectionPassword'
 
@@ -19,6 +20,7 @@ type SectionId =
   | 'interaction_types'
   | 'video_domains'
   | 'warning_days'
+  | 'tags'
   | 'users'
   | 'password'
 
@@ -28,9 +30,16 @@ const SECTION_IDS: SectionId[] = [
   'interaction_types',
   'video_domains',
   'warning_days',
+  'tags',
   'users',
   'password',
 ]
+
+// "tags" dung nhan tags.title (da co san — "The") thay vi settings.tags
+// (chua duoc seed) de tranh phai them migration moi cho 1 nhan sidebar.
+const NAV_LABEL_OVERRIDE: Partial<Record<SectionId, string>> = {
+  tags: 'tags.title',
+}
 
 type ToastMsg = { kind: 'success' | 'error'; text: string } | null
 
@@ -64,6 +73,10 @@ export function Settings() {
   const setSectionDirty = useCallback((id: SectionId, dirty: boolean) => {
     setDirtyMap((m) => (m[id] === dirty ? m : { ...m, [id]: dirty }))
   }, [])
+
+  function navLabel(id: SectionId): string {
+    return t(NAV_LABEL_OVERRIDE[id] ?? `settings.${id}`)
+  }
 
   function handleSelect(next: SectionId) {
     if (active !== next && dirtyMap[active]) {
@@ -104,6 +117,8 @@ export function Settings() {
             onDirtyChange={(d) => setSectionDirty('warning_days', d)}
           />
         )
+      case 'tags':
+        return <SectionTags showToast={showToast} />
       case 'users':
         return <SectionUsers showToast={showToast} />
       case 'password':
@@ -131,7 +146,7 @@ export function Settings() {
                   active === id ? 'bg-card font-semibold text-primary' : 'text-muted hover:text-ink'
                 }`}
               >
-                <span>{t(`settings.${id}`)}</span>
+                <span>{navLabel(id)}</span>
                 {dirtyMap[id] && (
                   <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber" aria-hidden />
                 )}
@@ -153,7 +168,7 @@ export function Settings() {
                     isOpen ? 'bg-card font-semibold text-primary' : 'text-ink'
                   }`}
                 >
-                  <span>{t(`settings.${id}`)}</span>
+                  <span>{navLabel(id)}</span>
                   <span className="flex items-center gap-2">
                     {dirtyMap[id] && <span className="h-1.5 w-1.5 rounded-full bg-amber" aria-hidden />}
                     <span className="text-xs text-muted">{isOpen ? '−' : '+'}</span>

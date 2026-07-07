@@ -22,6 +22,7 @@ export interface ParseResult {
 // gom cac cot do DB tu sinh: id, created_by, created_at, updated_at, search_text).
 export interface MappedPerson {
   full_name: string
+  nickname: string
   phone: string | null
   email: string | null
   birthday: string | null
@@ -156,6 +157,9 @@ export function mapRow(row: RawRow): { person: MappedPerson | null; error: strin
 
   const person: MappedPerson = {
     full_name: fullName,
+    // "Ten danh ba" (nickname) khi nhap CSV lay cung gia tri voi full_name —
+    // nguoi dung co the sua rieng tung o sau khi nhap.
+    nickname: fullName,
     phone: phone || null,
     email: email || null,
     birthday,

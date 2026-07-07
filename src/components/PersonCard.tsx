@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import type { PersonWithMeta } from '../hooks/usePersons'
 import { useLabels, useSettings } from '../hooks/useSettings'
+import { displayName } from '../lib/displayName'
 import { keepInTouch } from '../lib/keepInTouch'
 import type { GroupType } from '../lib/types'
 import { Avatar } from './Avatar'
@@ -28,6 +29,7 @@ export function PersonCard({ person, compact = false }: PersonCardProps) {
   const { warningDays } = useSettings()
 
   const color = GROUP_COLORS[person.group_type]
+  const primaryName = displayName(person)
   const status = keepInTouch({
     lastContacted: person.last_contacted,
     frequencyDays: person.contact_frequency_days,
@@ -57,11 +59,11 @@ export function PersonCard({ person, compact = false }: PersonCardProps) {
       )}
 
       <div className="mb-2.5 flex items-start gap-2.5">
-        <Avatar name={person.full_name} avatarUrl={person.avatar_url} size={compact ? 36 : 40} />
+        <Avatar name={primaryName} avatarUrl={person.avatar_url} size={compact ? 36 : 40} />
         <div className="min-w-0 flex-1 pr-4">
-          <div className="truncate text-[13px] font-bold text-ink">{person.full_name}</div>
-          {person.nickname && (
-            <div className="truncate text-[10px] text-muted">{person.nickname}</div>
+          <div className="truncate text-[13px] font-bold text-ink">{primaryName}</div>
+          {person.full_name !== primaryName && (
+            <div className="truncate text-[10px] text-muted">{person.full_name}</div>
           )}
         </div>
       </div>

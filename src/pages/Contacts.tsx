@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { usePersons } from '../hooks/usePersons'
 import { useLabels } from '../hooks/useSettings'
@@ -7,6 +8,7 @@ import type { GroupType } from '../lib/types'
 import { GROUP_COLORS, PersonCard } from '../components/PersonCard'
 import { PersonFormModal } from '../components/PersonFormModal'
 import { ContactsTable } from '../components/ContactsTable'
+import { TagFilterDropdown, type TagCount } from '../components/TagFilterDropdown'
 
 const GROUP_TYPES: GroupType[] = ['gia_dinh', 'ban_be', 'doi_tac', 'dong_nghiep', 'con_cai', 'khac']
 const VIEW_MODE_KEY = 'personalcrm.contacts.view_mode'
@@ -27,8 +29,22 @@ export function Contacts() {
   const [query, setQuery] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<GroupType | null>(null)
   const [favoriteOnly, setFavoriteOnly] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
   const [showAddModal, setShowAddModal] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
+
+  function toggleTag(tag: string) {
+    setSelectedTags((cur) => {
+      const next = new Set(cur)
+      if (next.has(tag)) next.delete(tag)
+      else next.add(tag)
+      return next
+    })
+  }
+
+  function clearTags() {
+    setSelectedTags(new Set())
+  }
 
   function changeViewMode(mode: ViewMode) {
     setViewMode(mode)
@@ -37,12 +53,23 @@ export function Contacts() {
 
   const vips = useMemo(() => persons.filter((p) => p.is_favorite), [persons])
 
+  const tagCounts = useMemo<TagCount[]>(() => {
+    const counts = new Map<string, number>()
+    for (const p of persons) {
+      for (const tag of p.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'vi'))
+  }, [persons])
+
   const filtered = useMemo(() => {
     const normalizedQuery = vnNormalize(query.trim())
 
     return persons.filter((p) => {
       if (favoriteOnly && !p.is_favorite) return false
       if (selectedGroup && p.group_type !== selectedGroup) return false
+      if (selectedTags.size > 0 && !p.tags.some((tag) => selectedTags.has(tag))) return false
 
       if (!normalizedQuery) return true
 
@@ -52,7 +79,7 @@ export function Contacts() {
 
       return haystack.includes(normalizedQuery)
     })
-  }, [persons, query, selectedGroup, favoriteOnly])
+  }, [persons, query, selectedGroup, favoriteOnly, selectedTags])
 
   return (
     <div className="anim-fi px-5 py-5 md:px-7">
@@ -62,13 +89,21 @@ export function Contacts() {
           <p className="mt-0.5 font-mono text-xs text-muted">{persons.length}</p>
         </div>
         {canEdit && (
-          <button
-            type="button"
-            onClick={() => setShowAddModal(true)}
-            className="flex-shrink-0 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-          >
-            + {t('actions.add_person')}
-          </button>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <Link
+              to="/goi-y-ten"
+              className="rounded-lg border border-line bg-card px-3 py-2 text-xs font-medium text-muted transition-colors hover:text-ink"
+            >
+              ✨ {t('names.title')}
+            </Link>
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              + {t('actions.add_person')}
+            </button>
+          </div>
         )}
       </div>
 
@@ -114,6 +149,12 @@ export function Contacts() {
         >
           ⭐ {t('person.favorite')}
         </button>
+        <TagFilterDropdown
+          tagCounts={tagCounts}
+          selected={selectedTags}
+          onToggle={toggleTag}
+          onClear={clearTags}
+        />
         <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-line">
           <button
             type="button"

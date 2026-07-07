@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import { usePersons } from '../hooks/usePersons'
 import type { PersonWithMeta } from '../hooks/usePersons'
 import { useSettings } from '../hooks/useSettings'
+import { displayName } from '../lib/displayName'
 import { vnNormalize } from '../lib/normalize'
 import { supabase } from '../lib/supabase'
 import type { InteractionTypeOption, LabelTree } from '../lib/types'
@@ -154,8 +155,8 @@ export function QuickAddFab() {
                       : 'border-transparent hover:bg-card'
                   }`}
                 >
-                  <Avatar name={p.full_name} avatarUrl={p.avatar_url} size={28} />
-                  <span className="truncate text-xs font-medium text-ink">{p.full_name}</span>
+                  <Avatar name={displayName(p)} avatarUrl={p.avatar_url} size={28} />
+                  <span className="truncate text-xs font-medium text-ink">{displayName(p)}</span>
                 </button>
               ))}
               {filteredPersons.length === 0 && (

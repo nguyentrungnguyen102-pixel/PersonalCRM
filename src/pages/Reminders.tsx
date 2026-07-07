@@ -8,6 +8,7 @@ import { Badge } from '../components/Badge'
 import { GROUP_COLORS } from '../components/PersonCard'
 import { usePersons } from '../hooks/usePersons'
 import { useLabels, useSettings } from '../hooks/useSettings'
+import { displayName } from '../lib/displayName'
 import { keepInTouch } from '../lib/keepInTouch'
 
 function formatDate(value: string | null | undefined): string | null {
@@ -73,10 +74,10 @@ export function Reminders() {
                 onClick={() => navigate(`/nguoi/${person.id}`)}
                 className="flex items-center gap-3 rounded-card border border-line bg-card px-3.5 py-3 text-left transition-colors hover:border-primary/30"
               >
-                <Avatar name={person.full_name} avatarUrl={person.avatar_url} size={40} />
+                <Avatar name={displayName(person)} avatarUrl={person.avatar_url} size={40} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="truncate text-sm font-semibold text-ink">{person.full_name}</span>
+                    <span className="truncate text-sm font-semibold text-ink">{displayName(person)}</span>
                     <span
                       className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-medium"
                       style={{ background: `${color}18`, color, borderColor: `${color}40` }}

@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PersonWithMeta } from '../hooks/usePersons'
 import { useLabels, useSettings } from '../hooks/useSettings'
+import { displayName } from '../lib/displayName'
 import { vnNormalize } from '../lib/normalize'
 import { supabase } from '../lib/supabase'
 import { keepInTouch, type KeepInTouchStatus } from '../lib/keepInTouch'
@@ -25,6 +26,7 @@ const STATUS_RANK: Record<KeepInTouchStatus, number> = {
 const PAGE_SIZE = 50
 
 type SortKey =
+  | 'nickname'
   | 'full_name'
   | 'group_type'
   | 'phone'
@@ -35,7 +37,14 @@ type SortKey =
   | 'status'
 
 type SortDir = 'asc' | 'desc'
-type EditableField = 'full_name' | 'group_type' | 'phone' | 'email' | 'tags' | 'contact_frequency_days'
+type EditableField =
+  | 'nickname'
+  | 'full_name'
+  | 'group_type'
+  | 'phone'
+  | 'email'
+  | 'tags'
+  | 'contact_frequency_days'
 type EditingCell = { id: string; field: EditableField } | null
 type ToastMsg = { kind: 'success' | 'error'; text: string } | null
 
@@ -64,7 +73,7 @@ export function ContactsTable({ persons, refresh, canEdit, isAdmin }: ContactsTa
   const { warningDays, groupDefaults } = useSettings()
 
   const [rows, setRows] = useState<PersonWithMeta[]>(persons)
-  const [sortKey, setSortKey] = useState<SortKey>('full_name')
+  const [sortKey, setSortKey] = useState<SortKey>('nickname')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -122,6 +131,8 @@ export function ContactsTable({ persons, refresh, canEdit, isAdmin }: ContactsTa
 
   function getSortValue(p: PersonWithMeta, key: SortKey): string | number {
     switch (key) {
+      case 'nickname':
+        return vnNormalize(displayName(p))
       case 'full_name':
         return vnNormalize(p.full_name)
       case 'group_type':
@@ -242,7 +253,7 @@ export function ContactsTable({ persons, refresh, canEdit, isAdmin }: ContactsTa
       )}
 
       <div className="overflow-x-auto rounded-card border border-line bg-card">
-        <table className="w-full min-w-[860px] border-collapse">
+        <table className="w-full min-w-[980px] border-collapse">
           <thead>
             <tr className="border-b border-line">
               {canEdit && (
@@ -257,7 +268,10 @@ export function ContactsTable({ persons, refresh, canEdit, isAdmin }: ContactsTa
                 </th>
               )}
               <th className="px-2.5 py-2 text-left">
-                <SortHeader label={t('table.name')} sortKeyFor="full_name" />
+                <SortHeader label={t('person.contact_name')} sortKeyFor="nickname" />
+              </th>
+              <th className="px-2.5 py-2 text-left">
+                <SortHeader label={t('person.full_name_label')} sortKeyFor="full_name" />
               </th>
               <th className="px-2.5 py-2 text-left">
                 <SortHeader label={t('table.group')} sortKeyFor="group_type" />
@@ -305,29 +319,52 @@ export function ContactsTable({ persons, refresh, canEdit, isAdmin }: ContactsTa
                     </td>
                   )}
 
-                  {/* Ten */}
+                  {/* Ten danh ba (nickname) — hien thi chinh */}
                   <td className={CELL_CLASS}>
-                    {isEditing('full_name') ? (
+                    {isEditing('nickname') ? (
                       <InlineTextInput
-                        initialValue={p.full_name}
+                        initialValue={p.nickname ?? ''}
                         onCommit={(v) => {
                           const trimmed = v.trim()
                           if (!trimmed) {
                             setEditingCell(null)
                             return
                           }
-                          void commitEdit(p.id, 'full_name', trimmed, p.full_name)
+                          void commitEdit(p.id, 'nickname', trimmed, p.nickname)
                         }}
                         onCancel={() => setEditingCell(null)}
                       />
                     ) : (
                       <div
-                        onClick={() => canEdit && setEditingCell({ id: p.id, field: 'full_name' })}
+                        onClick={() => canEdit && setEditingCell({ id: p.id, field: 'nickname' })}
                         className={`flex items-center gap-2 ${canEdit ? 'cursor-pointer' : ''}`}
                       >
-                        <Avatar name={p.full_name} avatarUrl={p.avatar_url} size={24} />
-                        <span className="truncate font-medium">{p.full_name}</span>
+                        <Avatar name={displayName(p)} avatarUrl={p.avatar_url} size={24} />
+                        <span className="truncate font-medium">{displayName(p)}</span>
                       </div>
+                    )}
+                  </td>
+
+                  {/* Ten day du (full_name) — mo neu con trung nickname (chua co ten that) */}
+                  <td className={CELL_CLASS}>
+                    {isEditing('full_name') ? (
+                      <InlineTextInput
+                        initialValue={p.full_name}
+                        onCommit={(v) => {
+                          const trimmed = v.trim() || p.nickname?.trim() || p.full_name
+                          void commitEdit(p.id, 'full_name', trimmed, p.full_name)
+                        }}
+                        onCancel={() => setEditingCell(null)}
+                      />
+                    ) : (
+                      <span
+                        onClick={() => canEdit && setEditingCell({ id: p.id, field: 'full_name' })}
+                        className={`block truncate ${canEdit ? 'cursor-pointer' : ''} ${
+                          p.full_name === p.nickname ? 'text-muted' : 'text-ink'
+                        }`}
+                      >
+                        {p.full_name}
+                      </span>
                     )}
                   </td>
 
@@ -489,7 +526,7 @@ export function ContactsTable({ persons, refresh, canEdit, isAdmin }: ContactsTa
             {pageRows.length === 0 && (
               <tr>
                 <td
-                  colSpan={canEdit ? 9 : 8}
+                  colSpan={canEdit ? 10 : 9}
                   className="px-3 py-8 text-center text-xs text-muted"
                 >
                   {t('empty.no_results')}
