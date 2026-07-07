@@ -38,7 +38,7 @@ export function ConfirmDialog({
       : 'bg-primary'
 
   return (
-    <Modal open={open} onClose={onCancel} title={dialogTitle} maxWidthClass="md:max-w-sm">
+    <Modal open={open} onClose={onCancel} title={dialogTitle} maxWidthClass="md:max-w-sm" center>
       <p className="mb-4 text-sm text-ink">{dialogMessage}</p>
 
       {error && (
