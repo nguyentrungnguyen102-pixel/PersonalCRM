@@ -6,7 +6,8 @@ import { useLabels } from '../hooks/useSettings'
 import { vnNormalize } from '../lib/normalize'
 import type { GroupType } from '../lib/types'
 import { GROUP_COLORS, PersonCard } from '../components/PersonCard'
-import { PersonFormModal } from '../components/PersonFormModal'
+import { PersonFormModal, type PersonFormInitialValues } from '../components/PersonFormModal'
+import { ScanCardModal } from '../components/ScanCardModal'
 import { ContactsTable } from '../components/ContactsTable'
 import { TagFilterDropdown, type TagCount } from '../components/TagFilterDropdown'
 
@@ -31,6 +32,10 @@ export function Contacts() {
   const [favoriteOnly, setFavoriteOnly] = useState(false)
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showScanModal, setShowScanModal] = useState(false)
+  const [scanInitialValues, setScanInitialValues] = useState<PersonFormInitialValues | undefined>(
+    undefined,
+  )
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
 
   function toggleTag(tag: string) {
@@ -98,6 +103,13 @@ export function Contacts() {
             </Link>
             <button
               type="button"
+              onClick={() => setShowScanModal(true)}
+              className="rounded-lg border border-line bg-card px-3 py-2 text-xs font-medium text-muted transition-colors hover:text-ink"
+            >
+              📇 {t('scan.title')}
+            </button>
+            <button
+              type="button"
               onClick={() => setShowAddModal(true)}
               className="rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
             >
@@ -109,8 +121,22 @@ export function Contacts() {
 
       <PersonFormModal
         open={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        initialValues={scanInitialValues}
+        onClose={() => {
+          setShowAddModal(false)
+          setScanInitialValues(undefined)
+        }}
         onSaved={refresh}
+      />
+
+      <ScanCardModal
+        open={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        onUseResult={(values) => {
+          setScanInitialValues(values)
+          setShowScanModal(false)
+          setShowAddModal(true)
+        }}
       />
 
       {viewMode === 'card' && vips.length > 0 && (

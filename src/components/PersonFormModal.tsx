@@ -12,9 +12,21 @@ import { Modal } from './Modal'
 const GROUP_TYPES: GroupType[] = ['gia_dinh', 'ban_be', 'doi_tac', 'dong_nghiep', 'con_cai', 'khac']
 const FREQ_OPTIONS: (number | null)[] = [null, 30, 60, 90, 180]
 
+// Gia tri goi y de dien san khi THEM MOI (vd tu Quet danh thiep) — chi ap
+// dung o che do them moi, khong bao gio ghi de khi dang sua nguoi da co.
+export interface PersonFormInitialValues {
+  nickname?: string
+  full_name?: string
+  phone?: string
+  email?: string
+  company?: string
+  job_title?: string
+}
+
 interface PersonFormModalProps {
   open: boolean
   person?: PersonWithMeta
+  initialValues?: PersonFormInitialValues
   onClose: () => void
   onSaved: () => void
 }
@@ -46,16 +58,20 @@ interface FormState {
   contact_frequency_days: number | null
 }
 
-function emptyForm(defaultGroup: GroupType, defaultFreq: number | null): FormState {
+function emptyForm(
+  defaultGroup: GroupType,
+  defaultFreq: number | null,
+  initialValues?: PersonFormInitialValues,
+): FormState {
   return {
-    full_name: '',
-    nickname: '',
+    full_name: initialValues?.full_name ?? '',
+    nickname: initialValues?.nickname ?? '',
     group_type: defaultGroup,
-    phone: '',
-    email: '',
+    phone: initialValues?.phone ?? '',
+    email: initialValues?.email ?? '',
     birthday: '',
-    company: '',
-    job_title: '',
+    company: initialValues?.company ?? '',
+    job_title: initialValues?.job_title ?? '',
     address: '',
     hometown: '',
     hobbies: '',
@@ -131,12 +147,12 @@ function Field({ label, children, full = false }: FieldProps) {
   )
 }
 
-export function PersonFormModal({ open, person, onClose, onSaved }: PersonFormModalProps) {
+export function PersonFormModal({ open, person, initialValues, onClose, onSaved }: PersonFormModalProps) {
   const { t, groupDefaults } = useSettings()
   const isEdit = !!person
 
   const [form, setForm] = useState<FormState>(() =>
-    person ? formFromPerson(person) : emptyForm('khac', groupDefaults.khac ?? null),
+    person ? formFromPerson(person) : emptyForm('khac', groupDefaults.khac ?? null, initialValues),
   )
   const [freqTouched, setFreqTouched] = useState(isEdit)
   const [saving, setSaving] = useState(false)
@@ -148,7 +164,7 @@ export function PersonFormModal({ open, person, onClose, onSaved }: PersonFormMo
       setForm(formFromPerson(person))
       setFreqTouched(true)
     } else {
-      setForm(emptyForm('khac', groupDefaults.khac ?? null))
+      setForm(emptyForm('khac', groupDefaults.khac ?? null, initialValues))
       setFreqTouched(false)
     }
     setError(null)

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { Badge } from '../components/Badge'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EnrichPanel } from '../components/EnrichPanel'
 import { InteractionFormModal } from '../components/InteractionFormModal'
 import { MediaAddModal } from '../components/MediaAddModal'
 import { GROUP_COLORS } from '../components/PersonCard'
@@ -509,6 +510,8 @@ export function PersonProfile() {
           <RelationsPanel personId={person.id} personName={displayName} />
 
           <TasksPanel personId={person.id} />
+
+          {canEdit && <EnrichPanel person={person} onSaved={refresh} />}
 
           {socialEntries.length > 0 && (
             <div className="rounded-lg border border-line bg-card px-3 py-3">
