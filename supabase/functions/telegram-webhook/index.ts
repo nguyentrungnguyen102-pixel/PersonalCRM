@@ -69,11 +69,16 @@ async function reply(chatId: number, text: string): Promise<void> {
 // ---------------------------------------------------------------------
 // Match nguoi theo ten (khong dau) — uu tien khop dai nhat / bat dau bang
 // ---------------------------------------------------------------------
-function scoreMatch(searchText: string, q: string): number {
-  if (!searchText) return 0
-  if (searchText === q) return 1000
-  if (searchText.startsWith(q)) return 500 + q.length
-  if (searchText.includes(q)) return 100 + q.length
+// Cham diem 1 TEN don le (nickname hoac full_name, da bo dau) so voi query.
+// Quan trong: "a bach" startsWith("a ba") nhung KHONG phai khop ranh gioi tu
+// — chi cong diem cao khi khop chinh xac hoac khop het mot tu.
+function scoreName(name: string, q: string): number {
+  if (!name) return 0
+  if (name === q) return 1000
+  if (name.startsWith(q + ' ')) return 600 // "a ba" khop "a ba chien" o ranh gioi tu
+  if (name.includes(' ' + q + ' ') || name.endsWith(' ' + q)) return 400
+  if (name.startsWith(q)) return 200 // khop giua tu ("a ba" ~ "a bach") — diem thap
+  if (name.includes(q)) return 100
   return 0
 }
 
@@ -85,7 +90,7 @@ async function matchPerson(nameQuery: string): Promise<PersonMatch | null> {
     .from('persons')
     .select('id, nickname, full_name, search_text')
     .ilike('search_text', `%${q}%`)
-    .limit(8)
+    .limit(20)
 
   if (error) {
     console.error('matchPerson loi query', error.message)
@@ -95,10 +100,15 @@ async function matchPerson(nameQuery: string): Promise<PersonMatch | null> {
 
   let best: PersonMatch | null = null
   let bestScore = 0
+  let bestLen = Infinity
   for (const p of data as PersonMatch[]) {
-    const score = scoreMatch(p.search_text ?? '', q)
-    if (score > bestScore) {
+    const names = [vnNormalize(p.nickname ?? ''), vnNormalize(p.full_name ?? '')]
+    const score = Math.max(scoreName(names[0], q), scoreName(names[1], q))
+    const len = Math.min(...names.filter(Boolean).map((n) => n.length))
+    // Hoa diem -> uu tien ten NGAN hon (khop "chat" hon voi query)
+    if (score > bestScore || (score === bestScore && score > 0 && len < bestLen)) {
       bestScore = score
+      bestLen = len
       best = p
     }
   }
