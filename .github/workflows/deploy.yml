@@ -1,0 +1,39 @@
+# Auto-deploy lên Cloudflare Pages
+# - push main  → deploy production (https://personalcrm.pages.dev)
+# - push nhánh khác → preview deploy (URL riêng theo nhánh)
+# Cần 2 secrets trong repo (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN  (quyền Account / Cloudflare Pages / Edit)
+#   CLOUDFLARE_ACCOUNT_ID
+name: Deploy Cloudflare Pages
+
+on:
+  push:
+    branches: ['main', 'claude/**']
+  workflow_dispatch:
+
+env:
+  # Vite bake env lúc build. Anon key là key CÔNG KHAI (luôn nằm trong bundle
+  # phía client) — bảo mật thật nằm ở RLS. Secret thật không đặt ở đây.
+  VITE_SUPABASE_URL: https://yzlpegtomgtdiwvuvftw.supabase.co
+  VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bHBlZ3RvbWd0ZGl3dnV2ZnR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMjEzMDMsImV4cCI6MjA5ODg5NzMwM30.3Io_FD3IDCylnfuXqHEehrrstvfCdFHEPCRRltxv5VU
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Deploy lên Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=personalcrm102 --branch=${{ github.ref_name == 'main' && 'main' || github.ref_name }}

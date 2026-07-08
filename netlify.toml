@@ -1,9 +1,0 @@
-[build]
-  command = "npm run build"
-  publish = "dist"
-
-# SPA: mọi route trả về index.html
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
