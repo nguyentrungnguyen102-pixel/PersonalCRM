@@ -10,12 +10,15 @@ import type { GroupType } from './types'
 // Kieu du lieu
 // ---------------------------------------------------------------------
 
-// Mot dong tho tu file CSV Google Contacts (header: true => key la ten cot).
+// Mot dong tho tu file CSV Google Contacts / LinkedIn (header: true => key la
+// ten cot).
 export type RawRow = Record<string, string>
+
+export type CsvFormat = 'google' | 'linkedin' | 'unknown'
 
 export interface ParseResult {
   rows: RawRow[]
-  isGoogleFormat: boolean
+  format: CsvFormat
 }
 
 // Ban ghi da chuan hoa, san sang de insert vao bang public.persons (khong
@@ -68,21 +71,57 @@ export interface RunImportResult {
 // 1) Doc file CSV
 // ---------------------------------------------------------------------
 
-export function parseGoogleCsv(file: File): Promise<ParseResult> {
-  return new Promise((resolve, reject) => {
-    parse<RawRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const fields = results.meta.fields ?? []
-        const isGoogleFormat =
-          fields.includes('First Name') &&
-          (fields.includes('Phone 1 - Value') || fields.includes('E-mail 1 - Value'))
-        resolve({ rows: results.data, isGoogleFormat })
-      },
-      error: (err: Error) => reject(err),
-    })
-  })
+// Nhan dien dinh dang CSV tu danh sach header. LinkedIn: co First Name +
+// Last Name + (Company hoac Position) nhung KHONG co Phone 1 - Value (cot
+// dac trung cua Google Contacts) — kiem tra linkedin truoc vi dieu kien chat
+// hon.
+export function detectCsvFormat(headers: string[]): CsvFormat {
+  const has = (h: string) => headers.includes(h)
+
+  if (
+    has('First Name') &&
+    has('Last Name') &&
+    (has('Company') || has('Position')) &&
+    !has('Phone 1 - Value')
+  ) {
+    return 'linkedin'
+  }
+
+  if (has('First Name') && (has('Phone 1 - Value') || has('E-mail 1 - Value'))) {
+    return 'google'
+  }
+
+  return 'unknown'
+}
+
+// File "LinkedIn Connections.csv" co vai dong ghi chu dau file ("Notes:",
+// dong trong, cau giai thich...) TRUOC dong header thuc su — PapaParse voi
+// header:true se hong cot neu doc nguyen van. Cat bo moi dong truoc dong bat
+// dau bang "First Name".
+function stripPreambleLines(text: string): string {
+  const lines = text.split(/\r\n|\n|\r/)
+  const headerIdx = lines.findIndex((l) => l.trim().startsWith('First Name'))
+  if (headerIdx <= 0) return text
+  return lines.slice(headerIdx).join('\n')
+}
+
+export function parseContactsCsv(file: File): Promise<ParseResult> {
+  return file.text().then(
+    (text) =>
+      new Promise<ParseResult>((resolve, reject) => {
+        const cleaned = stripPreambleLines(text)
+        parse<RawRow>(cleaned, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            const fields = results.meta.fields ?? []
+            const format = detectCsvFormat(fields)
+            resolve({ rows: results.data, format })
+          },
+          error: (err: Error) => reject(err),
+        })
+      }),
+  )
 }
 
 // ---------------------------------------------------------------------
@@ -178,6 +217,47 @@ export function mapRow(row: RawRow): { person: MappedPerson | null; error: strin
   return { person, error: null }
 }
 
+// Anh xa 1 dong CSV xuat tu LinkedIn (Connections.csv) -> MappedPerson.
+// Ten Viet tren LinkedIn thuong da viet dung thu tu ho-ten trong First Name /
+// Last Name (vd "Nguyen Trung" + "Nguyen") — cu ghep First + Last, khong dao.
+export function mapLinkedInRow(row: RawRow): { person: MappedPerson | null; error: string | null } {
+  const firstName = (row['First Name'] || '').trim()
+  const lastName = (row['Last Name'] || '').trim()
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
+
+  if (!fullName) {
+    return { person: null, error: 'import.no_identity' }
+  }
+
+  const email = (row['Email Address'] || '').trim().toLowerCase()
+  const company = (row['Company'] || '').trim() || null
+  const jobTitle = (row['Position'] || '').trim() || null
+  const url = (row['URL'] || '').trim()
+
+  const social_links: Record<string, string> = {}
+  if (url) social_links.linkedin = url
+
+  const person: MappedPerson = {
+    full_name: fullName,
+    nickname: fullName,
+    phone: null,
+    email: email || null,
+    birthday: null,
+    company,
+    job_title: jobTitle,
+    notes: null,
+    is_favorite: false,
+    tags: ['linkedin'],
+    group_type: 'khac',
+    contact_frequency_days: null,
+    hobbies: [],
+    preferences: {},
+    social_links,
+  }
+
+  return { person, error: null }
+}
+
 // ---------------------------------------------------------------------
 // 4) Doi chieu trung lap (trong file + voi du lieu da co)
 // ---------------------------------------------------------------------
@@ -191,7 +271,14 @@ interface IdentityFields {
 
 // Tim ban ghi trung theo thu tu uu tien: phone -> email -> full_name+birthday
 // (ca hai phai co birthday). Chuan hoa lai phone o ca hai phia truoc khi so.
-function findMatch<T extends IdentityFields>(person: IdentityFields, candidates: T[]): T | null {
+// looseNameMatch=true (dung cho LinkedIn — khong co phone/birthday): khi ca
+// hai phia CUNG THIEU birthday, chap nhan trung ten (vn_unaccent) — tranh so
+// nham voi ban ghi Google da co day du thong tin (van yeu cau birthday khop).
+function findMatch<T extends IdentityFields>(
+  person: IdentityFields,
+  candidates: T[],
+  looseNameMatch = false,
+): T | null {
   if (person.phone) {
     const found = candidates.find((c) => c.phone && normalizePhone(c.phone) === person.phone)
     if (found) return found
@@ -208,6 +295,10 @@ function findMatch<T extends IdentityFields>(person: IdentityFields, candidates:
       (c) => c.birthday && c.birthday === person.birthday && vnNormalize(c.full_name) === nameKey,
     )
     if (found) return found
+  } else if (looseNameMatch) {
+    const nameKey = vnNormalize(person.full_name)
+    const found = candidates.find((c) => !c.birthday && vnNormalize(c.full_name) === nameKey)
+    if (found) return found
   }
   return null
 }
@@ -217,8 +308,9 @@ function findMatch<T extends IdentityFields>(person: IdentityFields, candidates:
 export function findMatchingExisting(
   person: MappedPerson,
   existing: ExistingPerson[],
+  looseNameMatch = false,
 ): ExistingPerson | null {
-  return findMatch(person, existing)
+  return findMatch(person, existing, looseNameMatch)
 }
 
 // Dien vao cac o rong cua target bang du lieu cua source (dong sau merge vao
@@ -238,10 +330,10 @@ function fillEmpty(target: MappedPerson, source: MappedPerson): MappedPerson {
 }
 
 // Gop cac dong trung lap NGAY TRONG file CSV thanh 1 ban ghi duy nhat.
-function mergeWithinFile(mapped: MappedPerson[]): MappedPerson[] {
+function mergeWithinFile(mapped: MappedPerson[], looseNameMatch = false): MappedPerson[] {
   const merged: MappedPerson[] = []
   for (const person of mapped) {
-    const match = findMatch(person, merged)
+    const match = findMatch(person, merged, looseNameMatch)
     if (!match) {
       merged.push(person)
       continue
@@ -252,14 +344,20 @@ function mergeWithinFile(mapped: MappedPerson[]): MappedPerson[] {
   return merged
 }
 
-export function dedupePlan(mapped: MappedPerson[], existing: ExistingPerson[]): DedupePlan {
-  const merged = mergeWithinFile(mapped)
+// looseNameMatch: true cho dinh dang LinkedIn (khong co phone/birthday trong
+// file nguon) — xem ghi chu o findMatch.
+export function dedupePlan(
+  mapped: MappedPerson[],
+  existing: ExistingPerson[],
+  looseNameMatch = false,
+): DedupePlan {
+  const merged = mergeWithinFile(mapped, looseNameMatch)
 
   const inserts: MappedPerson[] = []
   const updates: DedupeUpdate[] = []
 
   for (const person of merged) {
-    const match = findMatch(person, existing)
+    const match = findMatch(person, existing, looseNameMatch)
     if (!match) {
       inserts.push(person)
       continue

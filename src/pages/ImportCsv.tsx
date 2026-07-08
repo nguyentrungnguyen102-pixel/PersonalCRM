@@ -10,11 +10,19 @@ import { supabase } from '../lib/supabase'
 import {
   dedupePlan,
   findMatchingExisting,
+  mapLinkedInRow,
   mapRow,
-  parseGoogleCsv,
+  parseContactsCsv,
   runImport,
 } from '../lib/importCsv'
-import type { DedupePlan, ExistingPerson, MappedPerson, RawRow, RunImportResult } from '../lib/importCsv'
+import type {
+  CsvFormat,
+  DedupePlan,
+  ExistingPerson,
+  MappedPerson,
+  RawRow,
+  RunImportResult,
+} from '../lib/importCsv'
 
 type Step = 'upload' | 'preview' | 'result'
 type RowStatus = 'new' | 'update' | 'error'
@@ -32,26 +40,57 @@ interface PreviewEntry {
 
 const PREVIEW_LIMIT = 20
 
-function buildPreviewEntries(rows: RawRow[], existing: ExistingPerson[]): PreviewEntry[] {
+// Dinh dang LinkedIn/Google dung ham anh xa va so khop trung khac nhau — 1
+// nguon lua chon duy nhat de dung ca o preview lan o handleFile.
+function mapperFor(format: CsvFormat) {
+  return format === 'linkedin' ? mapLinkedInRow : mapRow
+}
+
+function isLooseNameMatch(format: CsvFormat) {
+  return format === 'linkedin'
+}
+
+// Cac cot tho dung de hien preview khi 1 dong loi (khong anh xa duoc) — ten
+// cot khac nhau giua 2 dinh dang.
+function rawFallback(row: RawRow, format: CsvFormat) {
+  if (format === 'linkedin') {
+    return {
+      full_name: [row['First Name'], row['Last Name']].filter(Boolean).join(' '),
+      phone: '',
+      email: row['Email Address'] || '',
+      company: row['Company'] || '',
+    }
+  }
+  return {
+    full_name: [row['First Name'], row['Middle Name'], row['Last Name']].filter(Boolean).join(' '),
+    phone: row['Phone 1 - Value'] || '',
+    email: row['E-mail 1 - Value'] || '',
+    company: row['Organization Name'] || '',
+  }
+}
+
+function buildPreviewEntries(
+  rows: RawRow[],
+  existing: ExistingPerson[],
+  format: CsvFormat,
+): PreviewEntry[] {
+  const mapper = mapperFor(format)
+  const looseNameMatch = isLooseNameMatch(format)
+
   return rows.map((row, idx) => {
-    const { person, error } = mapRow(row)
+    const { person, error } = mapper(row)
 
     if (error || !person) {
       return {
         rowNumber: idx + 1,
         status: 'error',
-        full_name: [row['First Name'], row['Middle Name'], row['Last Name']]
-          .filter(Boolean)
-          .join(' '),
-        phone: row['Phone 1 - Value'] || '',
-        email: row['E-mail 1 - Value'] || '',
-        company: row['Organization Name'] || '',
+        ...rawFallback(row, format),
         tags: [],
         reason: error,
       }
     }
 
-    const match = findMatchingExisting(person, existing)
+    const match = findMatchingExisting(person, existing, looseNameMatch)
     return {
       rowNumber: idx + 1,
       status: match ? 'update' : 'new',
@@ -100,6 +139,7 @@ export function ImportCsv() {
   const [totalRows, setTotalRows] = useState(0)
   const [previewEntries, setPreviewEntries] = useState<PreviewEntry[]>([])
   const [plan, setPlan] = useState<DedupePlan | null>(null)
+  const [csvFormat, setCsvFormat] = useState<CsvFormat>('unknown')
 
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -118,6 +158,7 @@ export function ImportCsv() {
     setTotalRows(0)
     setPreviewEntries([])
     setPlan(null)
+    setCsvFormat('unknown')
     setRunning(false)
     setProgress({ done: 0, total: 0 })
     setResult(null)
@@ -135,9 +176,9 @@ export function ImportCsv() {
 
       setLoadingPreview(true)
       try {
-        const { rows, isGoogleFormat } = await parseGoogleCsv(file)
+        const { rows, format } = await parseContactsCsv(file)
 
-        if (!isGoogleFormat) {
+        if (format === 'unknown') {
           setUploadError(t('import.wrong_format'))
           setLoadingPreview(false)
           return
@@ -149,18 +190,22 @@ export function ImportCsv() {
 
         const existing = (existingError || !data ? [] : data) as ExistingPerson[]
 
+        const mapper = mapperFor(format)
+        const looseNameMatch = isLooseNameMatch(format)
+
         const validPersons: MappedPerson[] = []
         for (const row of rows) {
-          const { person } = mapRow(row)
+          const { person } = mapper(row)
           if (person) validPersons.push(person)
         }
 
-        const computedPlan = dedupePlan(validPersons, existing)
-        const entries = buildPreviewEntries(rows, existing)
+        const computedPlan = dedupePlan(validPersons, existing, looseNameMatch)
+        const entries = buildPreviewEntries(rows, existing, format)
 
         setTotalRows(rows.length)
         setPreviewEntries(entries)
         setPlan(computedPlan)
+        setCsvFormat(format)
         setStep('preview')
       } catch (e) {
         setUploadError(e instanceof Error ? e.message : String(e))
@@ -263,6 +308,11 @@ export function ImportCsv() {
 
       {step === 'preview' && plan && (
         <div>
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+              {csvFormat === 'linkedin' ? '💼 LinkedIn' : '📇 Google Contacts'}
+            </span>
+          </div>
           <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <div className="rounded-card border border-line bg-card px-4 py-3">
               <div className="font-mono text-xl font-bold">{totalRows}</div>
