@@ -10,6 +10,14 @@
 // - onSelectPerson: callback khi bam vao 1 node — Diagram.tsx (/so-do)
 //   khong truyen (tree mode o do von khong co click-to-profile) nen hanh vi
 //   khong doi; GiaPha.tsx truyen navigate(`/nguoi/:id`).
+// - printMode: bat che do xuat anh/in (xem src/lib/svgExport.ts va
+//   src/pages/GiaPha.tsx) — node ve BANG SVG THUAN (rect/circle/text), KHONG
+//   dung foreignObject/img/class Tailwind, de serialize sach va khong bi
+//   "taint" canvas khi rasterize. Che do mac dinh (printMode falsy) giu
+//   NGUYEN VEN nhu truoc — /so-do khong truyen prop nay nen khong doi hanh vi.
+// - yearsOf: chi dung trong printMode — tra ve chuoi "1932–2001" (hoac null)
+//   de hien dong thu 2 cua the; khong truyen/tra null thi dong nay an luon
+//   (khac voi che do tuong tac luon hien nhan nhom).
 
 import { useLabels } from '../../hooks/useSettings'
 import { displayName as personDisplayName } from '../../lib/displayName'
@@ -19,7 +27,7 @@ import type { FamilySide } from '../../lib/familyLayout'
 import type { GroupType } from '../../lib/types'
 import { Avatar } from '../Avatar'
 import { GROUP_COLORS } from '../PersonCard'
-import { FAMILY_SIDE_COLORS, truncateName } from './treeDisplay'
+import { FAMILY_SIDE_COLORS, initialsOf, truncateName } from './treeDisplay'
 
 export interface FamilyTreeSvgPerson {
   nickname: string | null
@@ -36,6 +44,8 @@ interface FamilyTreeSvgProps<P extends FamilyTreeSvgPerson> {
   sideOf?: Map<string, FamilySide>
   deceasedIds?: Set<string>
   onSelectPerson?: (id: string) => void
+  printMode?: boolean
+  yearsOf?: (id: string) => string | null
 }
 
 export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
@@ -46,6 +56,8 @@ export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
   sideOf,
   deceasedIds,
   onSelectPerson,
+  printMode = false,
+  yearsOf,
 }: FamilyTreeSvgProps<P>) {
   const { t } = useLabels()
   const cardW = NODE_W
@@ -125,6 +137,56 @@ export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
         const side = sideOf?.get(n.id)
         const sideColor = side ? FAMILY_SIDE_COLORS[side] : null
         const deceased = deceasedIds?.has(n.id) ?? false
+
+        if (printMode) {
+          const avatarR = 15
+          const avatarCx = n.x + 6 + avatarR
+          const avatarCy = n.y + cardH / 2
+          const textX = avatarCx + avatarR + 6
+          const years = yearsOf?.(n.id) ?? null
+          return (
+            <g key={n.id}>
+              <rect
+                x={n.x}
+                y={n.y}
+                width={cardW}
+                height={cardH}
+                rx={8}
+                fill="rgba(255,248,240,0.05)"
+                stroke={`${color}55`}
+                strokeWidth={1}
+              />
+              {sideColor && <rect x={n.x} y={n.y} width={cardW} height={3} fill={sideColor} />}
+              <circle cx={avatarCx} cy={avatarCy} r={avatarR} fill="#1f1116" />
+              <text
+                x={avatarCx}
+                y={avatarCy}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize={11}
+                fontWeight={700}
+                fill="#f97316"
+              >
+                {initialsOf(name)}
+              </text>
+              <text
+                x={textX}
+                y={n.y + (years ? 23 : cardH / 2 + 3)}
+                fontSize={10}
+                fontWeight={600}
+                fill={deceased ? '#9c8f85' : '#f5ede4'}
+              >
+                {deceased ? `🕯 ${truncateName(name)}` : truncateName(name)}
+              </text>
+              {years && (
+                <text x={textX} y={n.y + 36} fontSize={8} fill="#9c8f85">
+                  {years}
+                </text>
+              )}
+            </g>
+          )
+        }
+
         return (
           <foreignObject key={n.id} x={n.x} y={n.y} width={cardW} height={cardH}>
             <div

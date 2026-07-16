@@ -6,7 +6,7 @@
 // tinh toan thuan. Viewer (!canEdit) thay giao dien y het, chi an nut
 // them/xoa — RLS + persons_safe da lo phan du lieu rieng tu qua usePersons().
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -19,16 +19,21 @@ import { usePersons } from '../hooks/usePersons'
 import type { PersonWithMeta } from '../hooks/usePersons'
 import { useLabels } from '../hooks/useSettings'
 import { displayName as personDisplayName } from '../lib/displayName'
-import { computeFamilySides, FAMILY_RELATION_TYPES, layoutFamilyTree } from '../lib/familyLayout'
+import { computeFamilySides, FAMILY_RELATION_TYPES, layoutFamilyTree, NODE_W } from '../lib/familyLayout'
 import type { FamilyLayoutNode, FamilySide } from '../lib/familyLayout'
 import { daysUntil, formatLunar, nextLunarAnniversary } from '../lib/lunar'
 import { vnNormalize } from '../lib/normalize'
 import type { RelationshipRow } from '../lib/relations'
 import { supabase } from '../lib/supabase'
+import { exportSvgToPng } from '../lib/svgExport'
 
 const ROOT_KEY = 'personalcrm.giapha.root'
 const GIO_WITHIN_DAYS = 60
 const GIO_WARN_DAYS = 30
+// Phai khop cardH (58) khai bao trong FamilyTreeSvg.tsx — dung de tinh
+// kich thuoc svg xuat/in bao trum toan bo cay (xem treeExportSize duoi day).
+const EXPORT_CARD_H = 58
+const EXPORT_PADDING = 32
 
 function loadStoredRoot(): string | null {
   if (typeof window === 'undefined') return null
@@ -131,6 +136,10 @@ export function GiaPha() {
   const [removeTarget, setRemoveTarget] = useState<PersonWithMeta | null>(null)
   const [removing, setRemoving] = useState(false)
   const [removeError, setRemoveError] = useState<string | null>(null)
+
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [printing, setPrinting] = useState(false)
+  const exportSvgRef = useRef<SVGSVGElement>(null)
 
   const panZoom = usePanZoom(`tree:${rootId}`)
 
@@ -329,6 +338,62 @@ export function GiaPha() {
   const visibleGio = showAllGio ? upcomingGio : withinRangeGio
   const hasMoreGio = upcomingGio.length > withinRangeGio.length
 
+  // --- Xuat anh PNG / In ------------------------------------------------------
+  // Dung chung cho ca svg xuat (offscreen) va svg in (hien khi printing) —
+  // xem src/components/diagram/FamilyTreeSvg.tsx (prop yearsOf, chi dung o
+  // printMode).
+  const yearsOf = useCallback(
+    (id: string) => {
+      const p = familyPersonById.get(id)
+      return p ? lifespanLabel(p) : null
+    },
+    [familyPersonById],
+  )
+
+  // Kich thuoc svg xuat/in — bao trum toan bo cay theo toa do node (tu
+  // src/lib/familyLayout.ts layoutFamilyTree, da co san le NODE_W/2 o dau).
+  const treeExportSize = useMemo(() => {
+    if (tree.nodes.length === 0) return { width: 0, height: 0 }
+    const maxX = Math.max(...tree.nodes.map((n) => n.x))
+    const maxY = Math.max(...tree.nodes.map((n) => n.y))
+    return {
+      width: maxX + NODE_W + EXPORT_PADDING,
+      height: maxY + EXPORT_CARD_H + EXPORT_PADDING,
+    }
+  }, [tree.nodes])
+
+  async function handleExportPng() {
+    setExportError(null)
+    try {
+      if (!exportSvgRef.current) throw new Error('Khong tim thay cay de xuat.')
+      await exportSvgToPng(exportSvgRef.current, 'gia-pha.png')
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  function handlePrint() {
+    setExportError(null)
+    setPrinting(true)
+  }
+
+  // Cho DOM commit xong svg.print-tree (mount khi printing=true) roi moi mo
+  // hop thoai in — goi truc tiep se in truoc khi trinh duyet ve xong node.
+  useEffect(() => {
+    if (!printing) return
+    const raf = requestAnimationFrame(() => window.print())
+    return () => cancelAnimationFrame(raf)
+  }, [printing])
+
+  // Dong hop thoai in (Huy hoac In xong) → thao svg.print-tree khoi DOM.
+  useEffect(() => {
+    function handleAfterPrint() {
+      setPrinting(false)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [])
+
   function chooseRoot(id: string) {
     setRootId(id)
     setShowRootPicker(false)
@@ -437,7 +502,33 @@ export function GiaPha() {
         <>
           {/* Cay gia pha */}
           <div className="mb-4 rounded-card border border-line bg-card p-4">
-            <div className="mb-3 font-heading text-sm font-semibold text-ink">{t('giapha.tree')}</div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="font-heading text-sm font-semibold text-ink">{t('giapha.tree')}</div>
+              {tree.nodes.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleExportPng()}
+                    className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-[10px] font-medium text-ink transition-colors hover:border-primary/30"
+                  >
+                    {t('giapha.export_png')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-[10px] font-medium text-ink transition-colors hover:border-primary/30"
+                  >
+                    {t('giapha.print')}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {exportError && (
+              <p className="mb-2 rounded-lg border border-rose/30 bg-rose/5 px-2.5 py-1.5 text-[10px] text-rose">
+                {exportError}
+              </p>
+            )}
 
             <div className="relative h-[70vh] overflow-hidden rounded-lg border border-line bg-bg/20">
               <svg
@@ -496,6 +587,50 @@ export function GiaPha() {
               </div>
             )}
           </div>
+
+          {/* Ban sao cay o che do printMode, dat ngoai man hinh — chi de
+              exportSvgToPng() doc va serialize (xem src/lib/svgExport.ts).
+              Khong dung pan/zoom, khong an bang display:none (canvas khong
+              rasterize duoc phan tu display:none/khong render). */}
+          <svg
+            ref={exportSvgRef}
+            width={treeExportSize.width}
+            height={treeExportSize.height}
+            viewBox={`0 0 ${treeExportSize.width} ${treeExportSize.height}`}
+            aria-hidden="true"
+            style={{ position: 'fixed', left: -99999, top: 0 }}
+          >
+            <FamilyTreeSvg
+              printMode
+              nodes={tree.nodes}
+              edges={tree.edges}
+              treeNodeById={treeNodeById}
+              personById={familyPersonById}
+              sideOf={sideOf}
+              deceasedIds={deceasedIds}
+              yearsOf={yearsOf}
+            />
+          </svg>
+
+          {/* Ban sao cay hien khi in (window.print(), xem handlePrint) — chi
+              subtree nay hien tren trang in, xem @media print o src/index.css. */}
+          {printing && (
+            <div className="print-tree">
+              <svg width="100%" viewBox={`0 0 ${treeExportSize.width} ${treeExportSize.height}`}>
+                <rect x={0} y={0} width={treeExportSize.width} height={treeExportSize.height} fill="#080407" />
+                <FamilyTreeSvg
+                  printMode
+                  nodes={tree.nodes}
+                  edges={tree.edges}
+                  treeNodeById={treeNodeById}
+                  personById={familyPersonById}
+                  sideOf={sideOf}
+                  deceasedIds={deceasedIds}
+                  yearsOf={yearsOf}
+                />
+              </svg>
+            </div>
+          )}
 
           {/* Thanh vien theo doi */}
           <div className="mb-4 rounded-card border border-line bg-card p-4">

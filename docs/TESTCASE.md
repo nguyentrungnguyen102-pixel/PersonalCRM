@@ -87,6 +87,21 @@
 | F14 🤖 | Export ZIP | 6 file, BOM đúng, counts khớp DB, mở Excel không vỡ dấu | ✅ (203KB/900 người) |
 | F15 🤖 | Tesseract chunk | Không nằm trong vendor, không modulepreload, chỉ tải khi mở quét | ✅ |
 
+## TC-G. Gia phả (v2.0)
+
+| ID | Kịch bản | Kỳ vọng | KQ |
+|---|---|---|---|
+| G1 🤖 | Đánh dấu 3 người thuộc dòng họ (`in_family_tree`) | Hiện đủ trên /gia-pha (cây + danh sách thành viên) | — |
+| G2 🤖 | Cây 3 đời có bố mẹ vợ cũng thuộc dòng họ | Cả 2 phía render, chú giải đúng theo giới tính (Phía chồng/Phía vợ) | — |
+| G3 🤖 | Người có ngày giỗ 12/7 ÂL | Danh sách giỗ hiện đúng ngày dương tương ứng (đối chiếu lịch vạn niên) | — |
+| G4 🤖 | Bỏ thành viên khỏi dòng họ | Dialog xác nhận giữa màn hình, quan hệ (relationships) giữ nguyên (SQL verify) | — |
+| G5 🤖 | Cặp gốc thiếu giới tính (gender null) | Chú giải fallback "Phía <tên>" thay vì "Phía chồng/vợ" | — |
+| G6 👤 | Xuất PNG (nút "Xuất ảnh PNG") | File tải về, mở lên đọc rõ tên ở scale 2× | — |
+| G7 👤 | Chế độ in (nút "In") | Ẩn toàn bộ khung app (nav, FAB...), chỉ còn cây gia phả trên trang in | — |
+| G8 👤 | Export cây có người không avatar + người đã mất | Hiện chữ cái đầu (initials) thay avatar + tiền tố 🕯 trước tên người đã mất | — |
+| G9 🤖 | /so-do (cả 2 chế độ Cây + Mạng lưới) sau refactor FamilyTreeSvg | Không đổi hành vi (regression D2/D4) | — |
+| G10 🤖 | Nhãn `giapha.*` hiển thị đúng tiếng Việt ("Gia phả"...), kể cả khi DB chưa có nhóm nhãn giapha | Không hiện key thô, fallback về DEFAULT_SETTINGS | — |
+
 ## Lưu ý khi viết test mới
 - Assert text: dùng so sánh **case-insensitive** (nhiều heading CSS `text-transform: uppercase`).
 - Chọn person theo **id** (route /nguoi/:id) thay vì click text — "A Lộc NT" khớp cả "A Lộc NT 2".

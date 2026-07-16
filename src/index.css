@@ -80,3 +80,27 @@ select {
 .anim-slide-up {
   animation: slideUp 0.22s ease;
 }
+
+/* In cay gia pha (nut "In" tren /gia-pha, xem src/pages/GiaPha.tsx) — chi
+   subtree .print-tree duoc in, toan bo khung app (nav, FAB, blob nen...) an
+   di. Ky thuat "visibility:hidden tren body * roi mo lai .print-tree" la
+   cach dang tin cay nhat de in DUY NHAT 1 subtree ma khong phai sua lai
+   layout cua ca app cho che do in. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-tree,
+  .print-tree * {
+    visibility: visible;
+  }
+  .print-tree {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+  nav,
+  .no-print {
+    display: none !important;
+  }
+}

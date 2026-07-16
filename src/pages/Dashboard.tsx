@@ -12,10 +12,15 @@ import { usePersons } from '../hooks/usePersons'
 import { useLabels, useSettings } from '../hooks/useSettings'
 import { displayName as personDisplayName } from '../lib/displayName'
 import { keepInTouch } from '../lib/keepInTouch'
+import { daysUntil, formatLunar, nextLunarAnniversary } from '../lib/lunar'
 import { supabase } from '../lib/supabase'
 import type { GroupType, InteractionType } from '../lib/types'
 
 const GROUP_TYPES: GroupType[] = ['gia_dinh', 'ban_be', 'doi_tac', 'dong_nghiep', 'con_cai', 'khac']
+// Chi hien nguoi co gio trong 30 ngay toi (giong nguong "canh bao" GIO_WARN_DAYS
+// cua trang /gia-pha, xem src/pages/GiaPha.tsx) — toi da 5 dong de vua 1 card nho.
+const GIO_UPCOMING_DAYS = 30
+const GIO_UPCOMING_LIMIT = 5
 
 const URGENCY_HEX: Record<string, string> = {
   rose: '#fb7185',
@@ -123,6 +128,21 @@ export function Dashboard() {
   }, [persons])
 
   const favorites = useMemo(() => persons.filter((p) => p.is_favorite), [persons])
+
+  // Nguoi thuoc dong ho (in_family_tree) co ngay gio (cap ngay/thang am
+  // lich) roi vao 30 ngay toi — cung logic tinh ngay voi src/pages/GiaPha.tsx.
+  const upcomingGio = useMemo(() => {
+    const now = new Date()
+    return persons
+      .filter((p) => p.in_family_tree && p.death_lunar_day != null && p.death_lunar_month != null)
+      .map((p) => {
+        const nextDate = nextLunarAnniversary(p.death_lunar_day as number, p.death_lunar_month as number, now)
+        return { person: p, days: daysUntil(nextDate, now) }
+      })
+      .filter((x) => x.days <= GIO_UPCOMING_DAYS)
+      .sort((a, b) => a.days - b.days)
+      .slice(0, GIO_UPCOMING_LIMIT)
+  }, [persons])
 
   const loading = personsLoading || interactionsLoading
 
@@ -280,6 +300,36 @@ export function Dashboard() {
                   )}
                 </div>
               </div>
+
+              {upcomingGio.length > 0 && (
+                <div>
+                  <div className="mb-2 text-[10px] font-semibold tracking-[1.2px] text-muted uppercase">
+                    {t('giapha.upcoming_gio')}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {upcomingGio.map(({ person, days }) => (
+                      <button
+                        key={person.id}
+                        type="button"
+                        onClick={() => navigate(`/nguoi/${person.id}`)}
+                        className="flex items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-1.5 text-left"
+                      >
+                        <Avatar name={personDisplayName(person)} avatarUrl={person.avatar_url} size={24} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[11px] text-ink">{personDisplayName(person)}</div>
+                          <div className="text-[9px] text-muted">
+                            {formatLunar(person.death_lunar_day as number, person.death_lunar_month as number)}{' '}
+                            {t('person.lunar_suffix')}
+                          </div>
+                        </div>
+                        <span className="flex-shrink-0 font-mono text-[9px] text-muted">
+                          {t('giapha.days_left')} {days} {t('giapha.days_unit')}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <TasksPanel compact />
 
