@@ -19,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'contacts', path: '/danh-ba', primary: true },
   { key: 'import', path: '/nhap-danh-ba', primary: false, editOnly: true },
   { key: 'map', path: '/so-do', primary: false },
+  { key: 'giapha', path: '/gia-pha', primary: false },
   { key: 'reminders', path: '/nhac-nho', primary: true },
   { key: 'groups', path: '/nhom', primary: false },
   { key: 'inbox', path: '/hop-thu', primary: false, editOnly: true },

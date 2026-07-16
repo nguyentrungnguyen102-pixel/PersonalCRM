@@ -74,6 +74,13 @@ interface AdjEdge {
   deltaToOther: number
 }
 
+export interface LayoutFamilyTreeOptions {
+  // Khi co: dung de sap xep 2 nguoi trong 1 cap vo chong — 'nam' luon ben
+  // trai (member[0]), khong ro/khuyet gioi tinh thi lui ve sap theo id (nhu
+  // khi khong truyen opts). Khong anh huong callers khong truyen opts (Diagram).
+  genderOf?: (id: string) => 'nam' | 'nu' | null
+}
+
 /**
  * Tinh layout cay gia pha cho thanh phan lien thong (trong cac quan he gia
  * dinh) chua `rootId`. Tra ve { nodes: [], edges: [] } neu root khong co
@@ -83,6 +90,7 @@ export function layoutFamilyTree(
   relationships: FamilyRelRow[],
   personIds: Set<string>,
   rootId: string,
+  opts?: LayoutFamilyTreeOptions,
 ): FamilyLayoutResult {
   if (!personIds.has(rootId)) return { nodes: [], edges: [] }
 
@@ -143,8 +151,22 @@ export function layoutFamilyTree(
     if (!members) unitMembers.set(key, [id])
     else if (!members.includes(id)) members.push(id)
   }
-  // Sap xep on dinh (theo id) de xac dinh nguoi nao ben trai/phai trong cap.
-  for (const members of unitMembers.values()) members.sort()
+  // Sap xep on dinh de xac dinh nguoi nao ben trai/phai trong cap: neu co
+  // opts.genderOf thi 'nam' luon dung truoc (ben trai), khong ro/khuyet gioi
+  // tinh thi lui ve sap theo id — dung het opts.genderOf khong duoc truyen
+  // (Diagram) thi ket qua giong het `.sort()` mac dinh cu.
+  const genderOf = opts?.genderOf
+  for (const members of unitMembers.values()) {
+    members.sort((a, b) => {
+      if (genderOf) {
+        const ga = genderOf(a)
+        const gb = genderOf(b)
+        if (ga === 'nam' && gb !== 'nam') return -1
+        if (gb === 'nam' && ga !== 'nam') return 1
+      }
+      return a < b ? -1 : a > b ? 1 : 0
+    })
+  }
 
   // --- 3. Quan he "be tren -> con" quy ve unit (bo_me_con/ong_ba_chau) ---
   const childUnitsOf = new Map<string, string[]>()
@@ -235,4 +257,119 @@ export function layoutFamilyTree(
   }
 
   return { nodes, edges }
+}
+
+// --- computeFamilySides: gan nguoi vao "phia" (chong/vo/con chung) --------
+//
+// Dung cho trang /gia-pha de to mau vien the hien nguoi nay thuoc phia nao
+// (xem GiaPha.tsx). Thuat toan (dung QUY UOC trong opts o dau file cho
+// person_a/person_b cua tung loai quan he):
+//   1. Gieo mam: rootA -> 'a'; rootB -> 'b' (neu co).
+//   2. BFS XUOI (chi bo_me_con/ong_ba_chau, person_a -> person_b) bat dau tu
+//      {rootA, rootB} — moi nguoi con toi duoc gan 'chung'; khi 1 nguoi duoc
+//      gan 'chung', vo/chong cua ho (vo_chong) cung thanh 'chung' va BFS
+//      tiep tuc xuoi tu ho (dau re con dau/re cung la con chau chung).
+//   3. BFS tu rootA tren TOAN BO quan he gia dinh (khong phan biet chieu),
+//      bo qua rootB va bo qua nguoi da co nhan (khong ghi de) -> gan 'a'.
+//      Lam tuong tu tu rootB (bo qua rootA) -> gan 'b'.
+//   4. Nguoi khong duoc cham toi o ca 3 buoc tren thi khong co trong ket qua
+//      (absent khoi Map).
+export type FamilySide = 'a' | 'b' | 'chung'
+
+export function computeFamilySides(
+  relationships: FamilyRelRow[],
+  personIds: Set<string>,
+  rootA: string,
+  rootB: string | null,
+): Map<string, FamilySide> {
+  const result = new Map<string, FamilySide>()
+  if (!personIds.has(rootA)) return result
+
+  const familyRels = relationships.filter(
+    (r) =>
+      FAMILY_RELATION_TYPES.has(r.relation_type) &&
+      personIds.has(r.person_a) &&
+      personIds.has(r.person_b),
+  )
+
+  const validRootB = rootB && personIds.has(rootB) ? rootB : null
+
+  result.set(rootA, 'a')
+  if (validRootB) result.set(validRootB, 'b')
+
+  // --- 1. BFS xuoi tu {rootA, rootB} -> 'chung' --------------------------
+  const downAdj = new Map<string, string[]>() // cha/ong ba -> con/chau
+  const spouseAdj = new Map<string, string[]>() // vo_chong, 2 chieu
+  for (const r of familyRels) {
+    if (r.relation_type === 'bo_me_con' || r.relation_type === 'ong_ba_chau') {
+      if (!downAdj.has(r.person_a)) downAdj.set(r.person_a, [])
+      downAdj.get(r.person_a)!.push(r.person_b)
+    } else if (r.relation_type === 'vo_chong') {
+      if (!spouseAdj.has(r.person_a)) spouseAdj.set(r.person_a, [])
+      spouseAdj.get(r.person_a)!.push(r.person_b)
+      if (!spouseAdj.has(r.person_b)) spouseAdj.set(r.person_b, [])
+      spouseAdj.get(r.person_b)!.push(r.person_a)
+    }
+  }
+
+  const seeds = validRootB ? [rootA, validRootB] : [rootA]
+  const visitedDown = new Set<string>(seeds)
+  const downQueue: string[] = [...seeds]
+
+  while (downQueue.length > 0) {
+    const cur = downQueue.shift()!
+    for (const child of downAdj.get(cur) ?? []) {
+      if (visitedDown.has(child)) continue
+      visitedDown.add(child)
+      result.set(child, 'chung')
+      downQueue.push(child)
+    }
+    // Vo/chong cua nguoi 'chung' cung la 'chung' (dau re/con dau) — root
+    // ban than khong phai 'chung' nen khong lan qua vo/chong cua root o day.
+    if (result.get(cur) === 'chung') {
+      for (const spouse of spouseAdj.get(cur) ?? []) {
+        if (visitedDown.has(spouse)) continue
+        visitedDown.add(spouse)
+        result.set(spouse, 'chung')
+        downQueue.push(spouse)
+      }
+    }
+  }
+
+  // --- 2. BFS khong phan biet chieu tu rootA (bo qua rootB) -> 'a' ------
+  //        va tu rootB (bo qua rootA) -> 'b'. Khong ghi de nhan da co.
+  const undirectedAdj = new Map<string, string[]>()
+  for (const r of familyRels) {
+    if (!undirectedAdj.has(r.person_a)) undirectedAdj.set(r.person_a, [])
+    undirectedAdj.get(r.person_a)!.push(r.person_b)
+    if (!undirectedAdj.has(r.person_b)) undirectedAdj.set(r.person_b, [])
+    undirectedAdj.get(r.person_b)!.push(r.person_a)
+  }
+
+  function bfsSide(start: string, side: FamilySide, skip: string | null) {
+    const visited = new Set<string>([start])
+    const queue: string[] = [start]
+    while (queue.length > 0) {
+      const cur = queue.shift()!
+      for (const other of undirectedAdj.get(cur) ?? []) {
+        if (other === skip) continue
+        if (visited.has(other)) continue
+        visited.add(other)
+        // KHONG lan xuyen qua nguoi da la 'chung': neu co canh noi tat (vd
+        // ong_ba_chau tu ong ba ngoai toi chau chung), BFS phia A chay truoc
+        // se vong qua con chau chung roi gan nham ho hang phia B thanh 'a'.
+        // Ho hang moi phia van duoc gan du tu chinh root phia do (buoc BFS
+        // rieng ben duoi); ai chi toi duoc qua nhanh con chau chung (vd thong
+        // gia — bo me cua con dau/re) thi de trung lap (absent = mau trung tinh).
+        if (result.get(other) === 'chung') continue
+        if (!result.has(other)) result.set(other, side)
+        queue.push(other)
+      }
+    }
+  }
+
+  bfsSide(rootA, 'a', validRootB)
+  if (validRootB) bfsSide(validRootB, 'b', rootA)
+
+  return result
 }
