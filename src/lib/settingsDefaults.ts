@@ -87,6 +87,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
       burial_place: 'Mộ phần',
       biography: 'Tiểu sử',
       lunar_suffix: 'ÂL',
+      giapha_not_migrated:
+        'Đã lưu hồ sơ, nhưng các trường gia phả chưa lưu được — cơ sở dữ liệu chưa nâng cấp (chạy migration gia phả để kích hoạt).',
     },
     giapha: {
       title: 'Gia phả',
