@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { DEFAULT_SETTINGS } from '../lib/settingsDefaults'
 import { supabase } from '../lib/supabase'
 import type { GroupType, InteractionTypeOption, LabelTree } from '../lib/types'
 import { useAuth } from './useAuth'
@@ -113,7 +114,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (!error && data) applyRows(data as { key: string; value: unknown }[])
   }, [applyRows])
 
-  const t = useCallback((path: string) => getByPath(labels, path) ?? fallbackFromPath(path), [labels])
+  // Thu tu tra nhan: (1) labels tu DB (admin sua duoc, luon thang) →
+  // (2) DEFAULT_SETTINGS.labels dong goi san trong app (de nhan MOI hien dung
+  // tieng Viet ngay ca khi migration nhan chua duoc ap len DB, va khi dang
+  // load lan dau) → (3) cuoi cung moi roi ve doan cuoi cua key.
+  const t = useCallback(
+    (path: string) =>
+      getByPath(labels, path) ?? getByPath(DEFAULT_SETTINGS.labels, path) ?? fallbackFromPath(path),
+    [labels],
+  )
 
   const value = useMemo<SettingsContextValue>(
     () => ({ labels, groupDefaults, interactionTypes, videoDomains, warningDays, loading, t, refresh }),

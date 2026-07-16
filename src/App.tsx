@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { supabaseConfigured } from './lib/supabase'
@@ -15,6 +16,16 @@ import { NameSuggestions } from './pages/NameSuggestions'
 import { PersonProfile } from './pages/PersonProfile'
 import { Reminders } from './pages/Reminders'
 import { Settings } from './pages/Settings'
+
+const GiaPha = lazy(() => import('./pages/GiaPha'))
+
+function SuspenseFallback() {
+  return (
+    <div className="flex h-[60vh] items-center justify-center">
+      <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+    </div>
+  )
+}
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
@@ -71,6 +82,14 @@ function AppRoutes() {
         <Route path="/nhap-danh-ba" element={<ImportCsv />} />
         <Route path="/goi-y-ten" element={<NameSuggestions />} />
         <Route path="/so-do" element={<Diagram />} />
+        <Route
+          path="/gia-pha"
+          element={
+            <Suspense fallback={<SuspenseFallback />}>
+              <GiaPha />
+            </Suspense>
+          }
+        />
         <Route path="/nhac-nho" element={<Reminders />} />
         <Route path="/nhom" element={<Groups />} />
         <Route path="/hop-thu" element={<Inbox />} />

@@ -15,6 +15,7 @@ import { usePersonDetail } from '../hooks/usePersonDetail'
 import { useLabels, useSettings } from '../hooks/useSettings'
 import { displayName as personDisplayName } from '../lib/displayName'
 import { keepInTouch } from '../lib/keepInTouch'
+import { formatLunar, nextLunarAnniversary } from '../lib/lunar'
 import { supabase } from '../lib/supabase'
 import type { InteractionType, Media } from '../lib/types'
 
@@ -42,6 +43,14 @@ function formatDate(value: string | null | undefined): string | null {
   if (!match) return null
   const [, yyyy, mm, dd] = match
   return `${dd}/${mm}/${yyyy}`
+}
+
+// Dinh dang doi tuong Date (khong phai chuoi ISO tu DB) — dung cho ket qua
+// tra ve tu nextLunarAnniversary.
+function formatDateObj(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}/${d.getFullYear()}`
 }
 
 function getYoutubeEmbedId(url: string): string | null {
@@ -212,6 +221,30 @@ export function PersonProfile() {
   const showNotes = canEdit ? !!person.notes : true
   const showGiftIdeas = canEdit ? !!person.gift_ideas : true
 
+  // Gioi/ngay mat/gio — deu hien thi cho moi vai tro (khong phai du lieu
+  // rieng tu, di qua persons_safe cho viewer).
+  const genderLabel =
+    person.gender === 'nam' ? t('person.gender_nam') : person.gender === 'nu' ? t('person.gender_nu') : null
+
+  const hasLunarPair = person.death_lunar_day != null && person.death_lunar_month != null
+  const lunarLabel = hasLunarPair
+    ? `${formatLunar(person.death_lunar_day as number, person.death_lunar_month as number)} ${t('person.lunar_suffix')}`
+    : null
+
+  const deathDateBase = formatDate(person.death_date)
+  const deathDateValue = deathDateBase && lunarLabel ? `${deathDateBase} (${lunarLabel})` : deathDateBase
+
+  const nextAnniversaryValue =
+    hasLunarPair && lunarLabel
+      ? `${lunarLabel} — ${formatDateObj(
+          nextLunarAnniversary(
+            person.death_lunar_day as number,
+            person.death_lunar_month as number,
+            new Date(),
+          ),
+        )}`
+      : null
+
   return (
     <div className="anim-fi px-5 py-5 md:px-7">
       {/* Header */}
@@ -245,6 +278,11 @@ export function PersonProfile() {
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} aria-hidden />
                 {t(`groups.${person.group_type}`)}
               </span>
+              {person.in_family_tree && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  {t('person.in_family_tree')}
+                </span>
+              )}
               {person.tags.map((tag) => (
                 <span
                   key={tag}
@@ -291,6 +329,10 @@ export function PersonProfile() {
           <InfoRow label={t('person.job_title')} value={person.job_title} />
           <InfoRow label={t('person.address')} value={person.address} />
           <InfoRow label={t('person.hometown')} value={person.hometown} />
+          <InfoRow label={t('person.gender')} value={genderLabel} />
+          <InfoRow label={t('person.death_date')} value={deathDateValue} />
+          <InfoRow label={t('person.death_lunar')} value={nextAnniversaryValue} />
+          <InfoRow label={t('person.burial_place')} value={person.burial_place} />
           <InfoRow label={t('person.how_we_met')} value={person.how_we_met} />
 
           {person.hobbies.length > 0 && (
@@ -324,6 +366,15 @@ export function PersonProfile() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {person.biography && (
+            <div className="rounded-lg border border-line bg-card px-3 py-2.5">
+              <div className="mb-1.5 text-[9px] tracking-[0.8px] text-muted uppercase">
+                {t('person.biography')}
+              </div>
+              <div className="text-[11px] leading-relaxed text-ink">{person.biography}</div>
             </div>
           )}
         </aside>

@@ -3,18 +3,20 @@
 // xem src/lib/familyLayout.ts). Chi doc du lieu — khong co nut them/sua/xoa
 // o day, dung profile tung nguoi (RelationsPanel) de quan ly quan he.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation } from 'd3-force'
 import type { SimulationLinkDatum, SimulationNodeDatum } from 'd3-force'
 import { Avatar } from '../components/Avatar'
+import { FamilyTreeSvg } from '../components/diagram/FamilyTreeSvg'
+import { initialsOf, truncateName } from '../components/diagram/treeDisplay'
+import { useElementSize, usePanZoom } from '../components/diagram/usePanZoom'
 import { GROUP_COLORS } from '../components/PersonCard'
 import { useAuth } from '../hooks/useAuth'
 import { useLabels } from '../hooks/useSettings'
 import { displayName as personDisplayName } from '../lib/displayName'
-import { FAMILY_RELATION_TYPES, NODE_W, layoutFamilyTree } from '../lib/familyLayout'
-import type { FamilyLayoutEdge, FamilyLayoutNode } from '../lib/familyLayout'
+import { FAMILY_RELATION_TYPES, layoutFamilyTree } from '../lib/familyLayout'
+import type { FamilyLayoutNode } from '../lib/familyLayout'
 import { vnNormalize } from '../lib/normalize'
 import type { RelationType, RelationshipRow } from '../lib/relations'
 import { fetchRelationTypes } from '../lib/relations'
@@ -23,29 +25,13 @@ import type { GroupType } from '../lib/types'
 
 const MODE_KEY = 'personalcrm.diagram.mode'
 const NETWORK_TICKS = 300
-const MIN_SCALE = 0.35
-const MAX_SCALE = 2.5
 const ZOOM_LABEL_THRESHOLD = 0.8
-const DRAG_CLICK_THRESHOLD = 5 // px — duoi nguong nay tinh la click, khong phai keo pan
 
 type Mode = 'network' | 'tree'
 
 function loadMode(): Mode {
   if (typeof window === 'undefined') return 'network'
   return window.localStorage.getItem(MODE_KEY) === 'tree' ? 'tree' : 'network'
-}
-
-// Ten viet tat 2 chu cai — cung quy uoc voi src/components/Avatar.tsx
-// (khong import truc tiep vi Avatar.tsx khong export ham nay).
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
-}
-
-function truncateName(name: string, max = 14): string {
-  return name.length > max ? `${name.slice(0, max - 1)}…` : name
 }
 
 interface DiagramPerson {
@@ -64,94 +50,6 @@ interface DiagramPerson {
 // mang mot lan nua cho moi cai click.
 function labelForPerspective(r: RelationshipRow, personId: string): string {
   return r.person_a === personId ? r.direction_label_b_to_a : r.direction_label_a_to_b
-}
-
-interface PanZoomState {
-  scale: number
-  x: number
-  y: number
-}
-
-function usePanZoom(resetKey: unknown) {
-  const [view, setView] = useState<PanZoomState>({ scale: 1, x: 0, y: 0 })
-  const dragRef = useRef<{
-    active: boolean
-    startClientX: number
-    startClientY: number
-    startX: number
-    startY: number
-    moved: boolean
-  } | null>(null)
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => setView({ scale: 1, x: 0, y: 0 }), [resetKey])
-
-  const onPointerDown = useCallback((e: ReactPointerEvent<SVGSVGElement>) => {
-    dragRef.current = {
-      active: true,
-      startClientX: e.clientX,
-      startClientY: e.clientY,
-      startX: view.x,
-      startY: view.y,
-      moved: false,
-    }
-    ;(e.target as Element).setPointerCapture?.(e.pointerId)
-  }, [view.x, view.y])
-
-  const onPointerMove = useCallback((e: ReactPointerEvent<SVGSVGElement>) => {
-    const drag = dragRef.current
-    if (!drag?.active) return
-    const dx = e.clientX - drag.startClientX
-    const dy = e.clientY - drag.startClientY
-    if (Math.abs(dx) > DRAG_CLICK_THRESHOLD || Math.abs(dy) > DRAG_CLICK_THRESHOLD) drag.moved = true
-    setView((v) => ({ ...v, x: drag.startX + dx, y: drag.startY + dy }))
-  }, [])
-
-  const onPointerUp = useCallback((e: ReactPointerEvent<SVGSVGElement>) => {
-    if (dragRef.current) dragRef.current.active = false
-    ;(e.target as Element).releasePointerCapture?.(e.pointerId)
-  }, [])
-
-  const onWheel = useCallback((e: ReactWheelEvent<SVGSVGElement>) => {
-    e.preventDefault()
-    const factor = e.deltaY > 0 ? 0.9 : 1.1
-    setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.scale * factor)) }))
-  }, [])
-
-  const zoomBy = useCallback((factor: number) => {
-    setView((v) => ({ ...v, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.scale * factor)) }))
-  }, [])
-
-  // Cho biet lan pointerdown/up vua roi co phai la "keo" hay khong (de nut
-  // node phan biet click chon vs click ket thuc mot thao tac pan ngang qua no).
-  const wasDragged = useCallback(() => !!dragRef.current?.moved, [])
-
-  return { view, onPointerDown, onPointerMove, onPointerUp, onWheel, zoomBy, wasDragged }
-}
-
-function useElementSize<T extends HTMLElement>() {
-  const ref = useRef<T>(null)
-  const [size, setSize] = useState({ width: 800, height: 520 })
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-
-    function measure() {
-      if (!el) return
-      const rect = el.getBoundingClientRect()
-      if (rect.width > 0 && rect.height > 0) {
-        setSize({ width: rect.width, height: rect.height })
-      }
-    }
-
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  return { ref, size }
 }
 
 // --- Che do Mang luoi (d3-force) -------------------------------------------
@@ -529,7 +427,7 @@ export function Diagram() {
                   />
                 )}
                 {mode === 'tree' && (
-                  <TreeView nodes={tree.nodes} edges={tree.edges} treeNodeById={treeNodeById} personById={personById} />
+                  <FamilyTreeSvg nodes={tree.nodes} edges={tree.edges} treeNodeById={treeNodeById} personById={personById} />
                 )}
               </g>
             </svg>
@@ -690,111 +588,6 @@ function NetworkView({
               {truncateName(name)}
             </text>
           </g>
-        )
-      })}
-    </>
-  )
-}
-
-// --- Sub-render: Cay gia pha -------------------------------------------------
-
-interface TreeViewProps {
-  nodes: FamilyLayoutNode[]
-  edges: FamilyLayoutEdge[]
-  treeNodeById: Map<string, FamilyLayoutNode>
-  personById: Map<string, DiagramPerson>
-}
-
-function TreeView({ nodes, edges, treeNodeById, personById }: TreeViewProps) {
-  const { t } = useLabels()
-  const cardW = NODE_W
-  const cardH = 58
-
-  return (
-    <>
-      {edges.map((e, i) => {
-        const from = treeNodeById.get(e.from)
-        const to = treeNodeById.get(e.to)
-        if (!from || !to) return null
-
-        if (e.type === 'couple') {
-          const y1 = from.y + cardH / 2 - 3
-          const y2 = from.y + cardH / 2 + 3
-          const x1 = Math.min(from.x, to.x) + cardW / 2
-          const x2 = Math.max(from.x, to.x) + cardW / 2
-          return (
-            <g key={`couple-${i}`}>
-              <line x1={x1} y1={y1} x2={x2} y2={y1} stroke="rgba(249,115,22,0.4)" strokeWidth={1.5} />
-              <line x1={x1} y1={y2} x2={x2} y2={y2} stroke="rgba(249,115,22,0.4)" strokeWidth={1.5} />
-            </g>
-          )
-        }
-
-        if (e.type === 'other') {
-          const x1 = from.x + cardW / 2
-          const x2 = to.x + cardW / 2
-          const y = from.y + cardH / 2
-          return (
-            <line
-              key={`other-${i}`}
-              x1={x1}
-              y1={y}
-              x2={x2}
-              y2={y}
-              stroke="rgba(249,115,22,0.25)"
-              strokeWidth={1}
-              strokeDasharray="3 3"
-            />
-          )
-        }
-
-        // parent: duong gap khuc tu (giua cap neu co, hoac chinh nguoi do)
-        // xuong giua o con.
-        let fromX = from.x + cardW / 2
-        if (e.midFrom) {
-          const partnerEdge = edges.find(
-            (pe) => pe.type === 'couple' && (pe.from === e.from || pe.to === e.from),
-          )
-          if (partnerEdge) {
-            const partnerId = partnerEdge.from === e.from ? partnerEdge.to : partnerEdge.from
-            const partner = treeNodeById.get(partnerId)
-            if (partner) fromX = (from.x + partner.x) / 2 + cardW / 2
-          }
-        }
-        const fromY = from.y + cardH
-        const toX = to.x + cardW / 2
-        const toY = to.y
-        const midY = (fromY + toY) / 2
-        return (
-          <polyline
-            key={`parent-${i}`}
-            points={`${fromX},${fromY} ${fromX},${midY} ${toX},${midY} ${toX},${toY}`}
-            fill="none"
-            stroke="rgba(249,115,22,0.35)"
-            strokeWidth={1.25}
-          />
-        )
-      })}
-
-      {nodes.map((n) => {
-        const person = personById.get(n.id)
-        if (!person) return null
-        const name = personDisplayName(person)
-        const color = GROUP_COLORS[person.group_type]
-        return (
-          <foreignObject key={n.id} x={n.x} y={n.y} width={cardW} height={cardH}>
-            <div
-              style={{ borderColor: `${color}55`, background: 'rgba(255,248,240,0.03)' }}
-              className="flex h-full w-full items-center gap-1.5 overflow-hidden rounded-lg border px-1.5 py-1"
-              title={name}
-            >
-              <Avatar name={name} avatarUrl={person.avatar_url} size={30} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[10px] font-semibold text-ink">{truncateName(name)}</div>
-                <div className="truncate text-[8px] text-muted">{t(`groups.${person.group_type}`)}</div>
-              </div>
-            </div>
-          </foreignObject>
         )
       })}
     </>

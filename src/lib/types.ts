@@ -40,6 +40,13 @@ export interface Person {
   tags: string[]
   is_favorite: boolean
   contact_frequency_days: number | null
+  in_family_tree: boolean
+  gender: 'nam' | 'nu' | null
+  death_date: string | null
+  death_lunar_day: number | null
+  death_lunar_month: number | null
+  burial_place: string | null
+  biography: string | null
   notes: string | null
   created_by: string
   created_at: string

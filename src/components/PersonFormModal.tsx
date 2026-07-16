@@ -5,12 +5,29 @@ import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { PersonWithMeta } from '../hooks/usePersons'
 import { useSettings } from '../hooks/useSettings'
+import { convertSolar2Lunar } from '../lib/lunar'
 import { supabase } from '../lib/supabase'
 import type { GroupType } from '../lib/types'
 import { Modal } from './Modal'
 
 const GROUP_TYPES: GroupType[] = ['gia_dinh', 'ban_be', 'doi_tac', 'dong_nghiep', 'con_cai', 'khac']
 const FREQ_OPTIONS: (number | null)[] = [null, 30, 60, 90, 180]
+const GENDER_OPTIONS: ('nam' | 'nu' | null)[] = [null, 'nam', 'nu']
+// 7 truong gia pha trong payload — dung cho lop tuong thich DB chua nang cap
+// (xem retry trong handleSubmit). Phai khop migration 20260716100000.
+const GIAPHA_PAYLOAD_KEYS = [
+  'in_family_tree',
+  'gender',
+  'death_date',
+  'death_lunar_day',
+  'death_lunar_month',
+  'burial_place',
+  'biography',
+] as const
+const GIAPHA_COLUMN_RE =
+  /in_family_tree|death_lunar_day|death_lunar_month|death_date|burial_place|biography|gender/
+const LUNAR_DAY_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1)
+const LUNAR_MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1)
 
 // Gia tri goi y de dien san khi THEM MOI (vd tu Quet danh thiep) — chi ap
 // dung o che do them moi, khong bao gio ghi de khi dang sua nguoi da co.
@@ -56,6 +73,13 @@ interface FormState {
   notes: string
   is_favorite: boolean
   contact_frequency_days: number | null
+  in_family_tree: boolean
+  gender: 'nam' | 'nu' | null
+  death_date: string
+  death_lunar_day: number | null
+  death_lunar_month: number | null
+  burial_place: string
+  biography: string
 }
 
 function emptyForm(
@@ -88,6 +112,13 @@ function emptyForm(
     notes: '',
     is_favorite: false,
     contact_frequency_days: defaultFreq,
+    in_family_tree: false,
+    gender: null,
+    death_date: '',
+    death_lunar_day: null,
+    death_lunar_month: null,
+    burial_place: '',
+    biography: '',
   }
 }
 
@@ -119,7 +150,21 @@ function formFromPerson(person: PersonWithMeta): FormState {
     notes: person.notes ?? '',
     is_favorite: person.is_favorite,
     contact_frequency_days: person.contact_frequency_days,
+    in_family_tree: person.in_family_tree,
+    gender: person.gender,
+    death_date: person.death_date ?? '',
+    death_lunar_day: person.death_lunar_day,
+    death_lunar_month: person.death_lunar_month,
+    burial_place: person.burial_place ?? '',
+    biography: person.biography ?? '',
   }
+}
+
+// Checkbox "Da mat" la UI state rieng, KHONG phai cot DB — suy ra tu viec
+// nguoi nay da co du lieu lien quan den mat (ngay mat/gio/mo phan) hay chua,
+// de khi mo form sua thi tick san cho dung.
+function inferDeceased(person: PersonWithMeta): boolean {
+  return !!(person.death_date || person.death_lunar_day || person.burial_place)
 }
 
 function splitList(value: string): string[] {
@@ -155,6 +200,7 @@ export function PersonFormModal({ open, person, initialValues, onClose, onSaved 
     person ? formFromPerson(person) : emptyForm('khac', groupDefaults.khac ?? null, initialValues),
   )
   const [freqTouched, setFreqTouched] = useState(isEdit)
+  const [deceased, setDeceased] = useState(() => (person ? inferDeceased(person) : false))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -163,9 +209,11 @@ export function PersonFormModal({ open, person, initialValues, onClose, onSaved 
     if (person) {
       setForm(formFromPerson(person))
       setFreqTouched(true)
+      setDeceased(inferDeceased(person))
     } else {
       setForm(emptyForm('khac', groupDefaults.khac ?? null, initialValues))
       setFreqTouched(false)
+      setDeceased(false)
     }
     setError(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,6 +221,19 @@ export function PersonFormModal({ open, person, initialValues, onClose, onSaved 
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  // Doi ngay mat duong lich: neu 2 select am lich chua ai chon thi goi y san
+  // (nguoi dung van co the tu sua lai sau).
+  function handleDeathDateChange(value: string) {
+    setForm((f) => {
+      if (value && f.death_lunar_day == null && f.death_lunar_month == null) {
+        const [yyyy, mm, dd] = value.split('-').map(Number)
+        const lunar = convertSolar2Lunar(dd, mm, yyyy)
+        return { ...f, death_date: value, death_lunar_day: lunar.day, death_lunar_month: lunar.month }
+      }
+      return { ...f, death_date: value }
+    })
   }
 
   function handleGroupChange(group: GroupType) {
@@ -187,6 +248,10 @@ export function PersonFormModal({ open, person, initialValues, onClose, onSaved 
     e.preventDefault()
     if (!form.nickname.trim()) {
       setError(t('person.info'))
+      return
+    }
+    if (deceased && (form.death_lunar_day == null) !== (form.death_lunar_month == null)) {
+      setError(t('person.death_lunar'))
       return
     }
 
@@ -229,12 +294,42 @@ export function PersonFormModal({ open, person, initialValues, onClose, onSaved 
       notes: form.notes.trim() || null,
       is_favorite: form.is_favorite,
       contact_frequency_days: form.contact_frequency_days,
+      in_family_tree: form.in_family_tree,
+      gender: form.gender,
+      // Bo tick "Da mat" -> xoa toan bo du lieu lien quan den mat (nhung
+      // tieu su van giu doc lap, khong phu thuoc checkbox nay).
+      death_date: deceased ? form.death_date || null : null,
+      death_lunar_day: deceased ? form.death_lunar_day : null,
+      death_lunar_month: deceased ? form.death_lunar_month : null,
+      burial_place: deceased ? form.burial_place.trim() || null : null,
+      biography: form.biography.trim() || null,
     }
 
-    const result =
+    let result =
       isEdit && person
         ? await supabase.from('persons').update(payload).eq('id', person.id)
         : await supabase.from('persons').insert(payload)
+
+    // TUONG THICH DB CHUA NANG CAP (tam thoi — thanh dead-code vo hai sau khi
+    // migration 20260716100000_giapha_persons.sql duoc ap, go o dot don sau):
+    // neu DB live CHUA co 7 cot gia pha, PostgREST tra loi "Could not find
+    // the '<cot>' column" (PGRST204) → retry 1 lan voi payload BO 7 truong
+    // gia pha de thao tac Them/Sua person cu khong bi hong; bao nhe cho
+    // nguoi dung biet phan gia pha chua luu duoc.
+    if (result.error && GIAPHA_COLUMN_RE.test(result.error.message)) {
+      const legacyPayload = { ...payload } as Record<string, unknown>
+      for (const key of GIAPHA_PAYLOAD_KEYS) delete legacyPayload[key]
+      result =
+        isEdit && person
+          ? await supabase.from('persons').update(legacyPayload).eq('id', person.id)
+          : await supabase.from('persons').insert(legacyPayload)
+      if (!result.error) {
+        setSaving(false)
+        setError(t('person.giapha_not_migrated'))
+        onSaved()
+        return
+      }
+    }
 
     setSaving(false)
 
@@ -351,6 +446,116 @@ export function PersonFormModal({ open, person, initialValues, onClose, onSaved 
               )
             })}
           </div>
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-lg border border-line px-3 py-3">
+          <label className="flex items-center gap-2 text-xs text-ink">
+            <input
+              type="checkbox"
+              checked={form.in_family_tree}
+              onChange={(e) => update('in_family_tree', e.target.checked)}
+              className="h-3.5 w-3.5 accent-primary"
+            />
+            {t('person.in_family_tree')}
+          </label>
+
+          <div>
+            <div className="mb-1.5 text-[10px] font-medium tracking-[0.4px] text-muted uppercase">
+              {t('person.gender')}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {GENDER_OPTIONS.map((gender) => {
+                const active = form.gender === gender
+                return (
+                  <button
+                    key={gender ?? 'none'}
+                    type="button"
+                    onClick={() => update('gender', gender)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                      active
+                        ? 'border-primary/40 bg-primary/15 text-primary'
+                        : 'border-line bg-card text-muted hover:text-ink'
+                    }`}
+                  >
+                    {gender === 'nam' ? t('person.gender_nam') : gender === 'nu' ? t('person.gender_nu') : '—'}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-ink">
+            <input
+              type="checkbox"
+              checked={deceased}
+              onChange={(e) => setDeceased(e.target.checked)}
+              className="h-3.5 w-3.5 accent-muted"
+            />
+            {t('person.deceased')}
+          </label>
+
+          {deceased && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label={t('person.death_date')}>
+                <input
+                  type="date"
+                  value={form.death_date}
+                  onChange={(e) => handleDeathDateChange(e.target.value)}
+                  className={INPUT_CLASS}
+                />
+              </Field>
+
+              <Field label={`${t('person.death_lunar')} (${t('person.lunar_suffix')})`}>
+                <div className="flex gap-1.5">
+                  <select
+                    value={form.death_lunar_day ?? ''}
+                    onChange={(e) =>
+                      update('death_lunar_day', e.target.value === '' ? null : Number(e.target.value))
+                    }
+                    className="w-1/2 rounded-lg border border-line bg-card px-2 py-2 text-xs text-ink outline-none"
+                  >
+                    <option value="">—</option>
+                    {LUNAR_DAY_OPTIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={form.death_lunar_month ?? ''}
+                    onChange={(e) =>
+                      update('death_lunar_month', e.target.value === '' ? null : Number(e.target.value))
+                    }
+                    className="w-1/2 rounded-lg border border-line bg-card px-2 py-2 text-xs text-ink outline-none"
+                  >
+                    <option value="">—</option>
+                    {LUNAR_MONTH_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </Field>
+
+              <Field label={t('person.burial_place')} full>
+                <input
+                  value={form.burial_place}
+                  onChange={(e) => update('burial_place', e.target.value)}
+                  className={INPUT_CLASS}
+                />
+              </Field>
+            </div>
+          )}
+
+          <Field label={t('person.biography')}>
+            <textarea
+              value={form.biography}
+              onChange={(e) => update('biography', e.target.value)}
+              rows={2}
+              className={`${INPUT_CLASS} resize-none`}
+            />
+          </Field>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
