@@ -5,19 +5,31 @@ import { Badge } from '../components/Badge'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EnrichPanel } from '../components/EnrichPanel'
 import { InteractionFormModal } from '../components/InteractionFormModal'
+import { LifeEventModal } from '../components/LifeEventModal'
 import { MediaAddModal } from '../components/MediaAddModal'
 import { GROUP_COLORS } from '../components/PersonCard'
 import { PersonFormModal } from '../components/PersonFormModal'
 import { RelationsPanel } from '../components/RelationsPanel'
 import { TasksPanel } from '../components/TasksPanel'
+import { Timeline } from '../components/Timeline'
+import type { TimelineItem } from '../components/Timeline'
 import { useAuth } from '../hooks/useAuth'
 import { usePersonDetail } from '../hooks/usePersonDetail'
 import { useLabels, useSettings } from '../hooks/useSettings'
 import { displayName as personDisplayName } from '../lib/displayName'
 import { keepInTouch } from '../lib/keepInTouch'
+import {
+  buildComputedEvents,
+  computedEventSortKeys,
+  deleteLifeEvent,
+  fetchLifeEvents,
+  lifeEventSortKey,
+  lifeEventToTimelineItem,
+} from '../lib/lifeEvents'
+import type { LifeEvent } from '../lib/lifeEvents'
 import { formatLunar, nextLunarAnniversary } from '../lib/lunar'
 import { supabase } from '../lib/supabase'
-import type { InteractionType, Media } from '../lib/types'
+import type { Interaction, InteractionType, Media } from '../lib/types'
 
 const INTERACTION_ICONS: Record<InteractionType, string> = {
   gap_mat: '🤝',
@@ -51,6 +63,21 @@ function formatDateObj(d: Date): string {
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   return `${dd}/${mm}/${d.getFullYear()}`
+}
+
+// Anh xa 1 tuong tac sang TimelineItem — giu nguyen y het markup/du lieu cu
+// (icon, nhan loai, ngay, tieu de, ghi chu, dia diem voi tien to 📍) chi khac
+// la duoc Timeline.tsx render thay vi JSX lap trong component nay.
+function interactionToTimelineItem(item: Interaction, t: (path: string) => string): TimelineItem {
+  return {
+    id: item.id,
+    icon: INTERACTION_ICONS[item.type],
+    chipLabel: t(`interaction_types.${item.type}`),
+    dateLabel: formatDate(item.date) ?? '',
+    title: item.title ?? undefined,
+    note: item.note ?? undefined,
+    footer: item.location ? `📍 ${item.location}` : undefined,
+  }
 }
 
 function getYoutubeEmbedId(url: string): string | null {
@@ -119,6 +146,48 @@ export function PersonProfile() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  // Su kien cuoc doi (life_events) — fetch rieng (khong dong bo usePersonDetail
+  // theo yeu cau giu hook do nguyen ven), tu refresh qua reloadKey.
+  const [lifeEvents, setLifeEvents] = useState<LifeEvent[]>([])
+  const [lifeEventsReloadKey, setLifeEventsReloadKey] = useState(0)
+  const [showLifeEventModal, setShowLifeEventModal] = useState(false)
+  const [editingLifeEvent, setEditingLifeEvent] = useState<LifeEvent | null>(null)
+  const [deleteEventTarget, setDeleteEventTarget] = useState<LifeEvent | null>(null)
+  const [deletingEvent, setDeletingEvent] = useState(false)
+  const [deleteEventError, setDeleteEventError] = useState<string | null>(null)
+
+  function refreshLifeEvents() {
+    setLifeEventsReloadKey((k) => k + 1)
+  }
+
+  useEffect(() => {
+    let active = true
+    if (!id) {
+      setLifeEvents([])
+      return
+    }
+    fetchLifeEvents(id).then((rows) => {
+      if (active) setLifeEvents(rows)
+    })
+    return () => {
+      active = false
+    }
+  }, [id, lifeEventsReloadKey])
+
+  async function handleDeleteLifeEvent() {
+    if (!deleteEventTarget) return
+    setDeletingEvent(true)
+    setDeleteEventError(null)
+    const { error } = await deleteLifeEvent(deleteEventTarget.id)
+    setDeletingEvent(false)
+    if (error) {
+      setDeleteEventError(error.message)
+      return
+    }
+    setDeleteEventTarget(null)
+    refreshLifeEvents()
+  }
 
   useEffect(() => {
     let active = true
@@ -244,6 +313,56 @@ export function PersonProfile() {
           ),
         )}`
       : null
+
+  // Dong thoi gian gop: tuong tac (nhu cu) + su kien cuoc doi (life_events) +
+  // su kien "ao" tinh tu ho so (sinh/mat) — sap xep chung moi -> cu theo 1
+  // sort key thong nhat (xem lifeEventSortKey/computedEventSortKeys).
+  function canDeleteLifeEvent(e: LifeEvent): boolean {
+    return role === 'admin' || (role === 'editor' && e.created_by === user?.id)
+  }
+
+  function lifeEventActions(e: LifeEvent) {
+    if (!canEdit) return undefined
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setEditingLifeEvent(e)
+            setShowLifeEventModal(true)
+          }}
+          aria-label={t('actions.edit')}
+          className="rounded-md p-0.5 text-muted transition-colors hover:text-ink"
+        >
+          ✎
+        </button>
+        {canDeleteLifeEvent(e) && (
+          <button
+            type="button"
+            onClick={() => setDeleteEventTarget(e)}
+            aria-label={t('actions.delete')}
+            className="rounded-md p-0.5 text-muted transition-colors hover:text-rose"
+          >
+            ✕
+          </button>
+        )}
+      </>
+    )
+  }
+
+  const computedItems = buildComputedEvents(person, t)
+  const computedKeys = computedEventSortKeys(person)
+
+  const timelineEntries: { sortKey: string; item: TimelineItem }[] = [
+    ...interactions.map((i) => ({ sortKey: i.date, item: interactionToTimelineItem(i, t) })),
+    ...lifeEvents.map((e) => ({
+      sortKey: lifeEventSortKey(e),
+      item: lifeEventToTimelineItem(e, t, lifeEventActions(e)),
+    })),
+    ...computedItems.map((item) => ({ sortKey: computedKeys[item.id] ?? '', item })),
+  ]
+  timelineEntries.sort((a, b) => (a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0))
+  const timelineItems = timelineEntries.map((e) => e.item)
 
   return (
     <div className="anim-fi px-5 py-5 md:px-7">
@@ -387,54 +506,33 @@ export function PersonProfile() {
                 {t('person.timeline')}
               </div>
               {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => setShowInteractionModal(true)}
-                  className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary"
-                >
-                  + {t('actions.add_interaction')}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowInteractionModal(true)}
+                    className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary"
+                  >
+                    + {t('actions.add_interaction')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingLifeEvent(null)
+                      setShowLifeEventModal(true)
+                    }}
+                    className="rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary"
+                  >
+                    + {t('life_event.add')}
+                  </button>
+                </div>
               )}
             </div>
 
-            {interactions.length === 0 && (
+            {timelineItems.length === 0 && (
               <p className="text-xs text-muted">{t('empty.no_interactions')}</p>
             )}
 
-            {interactions.length > 0 && (
-              <div className="flex flex-col">
-                {interactions.map((item, idx) => (
-                  <div key={item.id} className="flex gap-2.5 pb-3.5">
-                    <div className="flex flex-shrink-0 flex-col items-center pt-0.5">
-                      <div
-                        className="h-2 w-2 rounded-full bg-primary"
-                        style={{ boxShadow: '0 0 7px rgba(249,115,22,0.5)' }}
-                        aria-hidden
-                      />
-                      {idx < interactions.length - 1 && (
-                        <div className="mt-1 min-h-6 w-px flex-1 bg-line" aria-hidden />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                        <span aria-hidden>{INTERACTION_ICONS[item.type]}</span>
-                        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                          {t(`interaction_types.${item.type}`)}
-                        </span>
-                        <span className="font-mono text-[10px] text-muted">
-                          {formatDate(item.date)}
-                        </span>
-                      </div>
-                      {item.title && <div className="text-xs font-semibold text-ink">{item.title}</div>}
-                      {item.note && <div className="text-xs leading-relaxed text-ink">{item.note}</div>}
-                      {item.location && (
-                        <div className="mt-0.5 text-[10px] text-muted">📍 {item.location}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            {timelineItems.length > 0 && <Timeline items={timelineItems} />}
           </div>
 
           <div>
@@ -639,6 +737,17 @@ export function PersonProfile() {
         onSaved={refresh}
       />
 
+      <LifeEventModal
+        open={showLifeEventModal}
+        personId={person.id}
+        event={editingLifeEvent}
+        onClose={() => {
+          setShowLifeEventModal(false)
+          setEditingLifeEvent(null)
+        }}
+        onSaved={refreshLifeEvents}
+      />
+
       <ConfirmDialog
         open={showDeleteConfirm}
         loading={deleting}
@@ -647,6 +756,18 @@ export function PersonProfile() {
         onCancel={() => {
           setShowDeleteConfirm(false)
           setDeleteError(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!deleteEventTarget}
+        loading={deletingEvent}
+        error={deleteEventError}
+        message={t('life_event.delete_confirm')}
+        onConfirm={() => void handleDeleteLifeEvent()}
+        onCancel={() => {
+          setDeleteEventTarget(null)
+          setDeleteEventError(null)
         }}
       />
     </div>

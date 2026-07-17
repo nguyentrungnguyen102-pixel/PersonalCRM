@@ -5,9 +5,11 @@ import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { PersonWithMeta } from '../hooks/usePersons'
 import { useSettings } from '../hooks/useSettings'
+import { displayName as personDisplayName } from '../lib/displayName'
 import { convertSolar2Lunar } from '../lib/lunar'
 import { supabase } from '../lib/supabase'
 import type { GroupType } from '../lib/types'
+import { AvatarUpload } from './AvatarUpload'
 import { Modal } from './Modal'
 
 const GROUP_TYPES: GroupType[] = ['gia_dinh', 'ban_be', 'doi_tac', 'dong_nghiep', 'con_cai', 'khac']
@@ -345,6 +347,15 @@ export function PersonFormModal({ open, person, initialValues, onClose, onSaved 
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? t('actions.edit') : t('actions.add_person')} maxWidthClass="md:max-w-2xl">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {isEdit && person && (
+          <AvatarUpload
+            personId={person.id}
+            currentUrl={person.avatar_url}
+            name={personDisplayName(person)}
+            onSaved={onSaved}
+          />
+        )}
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={`${t('person.contact_name')} *`} full>
             <input

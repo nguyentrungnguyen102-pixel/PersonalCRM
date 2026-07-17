@@ -14,6 +14,7 @@ import { FamilyTreeSvg } from '../components/diagram/FamilyTreeSvg'
 import { FAMILY_SIDE_COLORS } from '../components/diagram/treeDisplay'
 import { usePanZoom } from '../components/diagram/usePanZoom'
 import { FamilyMemberPicker } from '../components/giapha/FamilyMemberPicker'
+import { PersonPanel } from '../components/giapha/PersonPanel'
 import { useAuth } from '../hooks/useAuth'
 import { usePersons } from '../hooks/usePersons'
 import type { PersonWithMeta } from '../hooks/usePersons'
@@ -132,6 +133,7 @@ export function GiaPha() {
   const [showRootPicker, setShowRootPicker] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
   const [showAllGio, setShowAllGio] = useState(false)
+  const [panelPersonId, setPanelPersonId] = useState<string | null>(null)
 
   const [removeTarget, setRemoveTarget] = useState<PersonWithMeta | null>(null)
   const [removing, setRemoving] = useState(false)
@@ -143,21 +145,18 @@ export function GiaPha() {
 
   const panZoom = usePanZoom(`tree:${rootId}`)
 
-  useEffect(() => {
-    let active = true
+  // Tach thanh callback rieng de dung lai duoc ca trong useEffect (lan dau)
+  // lan onChanged cua PersonPanel (sau khi them/xoa quan he tu panel).
+  const refreshRels = useCallback(async () => {
     setRelLoading(true)
-    supabase
-      .from('relationships')
-      .select('*')
-      .then(({ data, error }) => {
-        if (!active) return
-        if (!error && data) setRelationships(data as RelationshipRow[])
-        setRelLoading(false)
-      })
-    return () => {
-      active = false
-    }
+    const { data, error } = await supabase.from('relationships').select('*')
+    if (!error && data) setRelationships(data as RelationshipRow[])
+    setRelLoading(false)
   }, [])
+
+  useEffect(() => {
+    void refreshRels()
+  }, [refreshRels])
 
   const familyPersons = useMemo(() => persons.filter((p) => p.in_family_tree), [persons])
   const familyIds = useMemo(() => new Set(familyPersons.map((p) => p.id)), [familyPersons])
@@ -166,6 +165,15 @@ export function GiaPha() {
     for (const p of familyPersons) map.set(p.id, p)
     return map
   }, [familyPersons])
+
+  // Map TOAN BO nguoi (khong chi dong ho) — PersonPanel can no de hien thi
+  // ten nguoi trong quan he ke ca khi nguoi do chua thuoc dong ho
+  // (in_family_tree = false), vi du con dau/con re moi chua duoc them.
+  const allPersonById = useMemo(() => {
+    const map = new Map<string, PersonWithMeta>()
+    for (const p of persons) map.set(p.id, p)
+    return map
+  }, [persons])
 
   // Mac dinh chon nguoi co nhieu quan he GIA DINH nhat lam goc cay (cung
   // heuristic voi Diagram.tsx) — chi tinh lai khi rootId hien tai khong hop
@@ -558,7 +566,7 @@ export function GiaPha() {
                     personById={familyPersonById}
                     sideOf={sideOf}
                     deceasedIds={deceasedIds}
-                    onSelectPerson={(id) => navigate(`/nguoi/${id}`)}
+                    onSelectPerson={(id) => setPanelPersonId(id)}
                   />
                 </g>
               </svg>
@@ -657,7 +665,7 @@ export function GiaPha() {
                       key={p.id}
                       person={p}
                       canEdit={canEdit}
-                      onOpen={() => navigate(`/nguoi/${p.id}`)}
+                      onOpen={() => setPanelPersonId(p.id)}
                       onRemove={() => setRemoveTarget(p)}
                     />
                   ))}
@@ -677,7 +685,7 @@ export function GiaPha() {
                       key={p.id}
                       person={p}
                       canEdit={canEdit}
-                      onOpen={() => navigate(`/nguoi/${p.id}`)}
+                      onOpen={() => setPanelPersonId(p.id)}
                       onRemove={() => setRemoveTarget(p)}
                     />
                   ))}
@@ -761,6 +769,21 @@ export function GiaPha() {
           setRemoveError(null)
         }}
       />
+
+      {panelPersonId && (
+        <PersonPanel
+          personId={panelPersonId}
+          persons={allPersonById}
+          relationships={relationships}
+          canEdit={canEdit}
+          onClose={() => setPanelPersonId(null)}
+          onChanged={() => {
+            refresh()
+            void refreshRels()
+          }}
+          onSelectPerson={setPanelPersonId}
+        />
+      )}
     </div>
   )
 }
