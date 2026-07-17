@@ -101,6 +101,12 @@
 | G8 👤 | Export cây có người không avatar + người đã mất | Hiện chữ cái đầu (initials) thay avatar + tiền tố 🕯 trước tên người đã mất | — |
 | G9 🤖 | /so-do (cả 2 chế độ Cây + Mạng lưới) sau refactor FamilyTreeSvg | Không đổi hành vi (regression D2/D4) | — |
 | G10 🤖 | Nhãn `giapha.*` hiển thị đúng tiếng Việt ("Gia phả"...), kể cả khi DB chưa có nhóm nhãn giapha | Không hiện key thô, fallback về DEFAULT_SETTINGS | — |
+| G11 🤖 | Nhập Excel end-to-end (ghép cột + quan hệ + trùng tên ambiguous bị bỏ qua có báo cáo) | Người/quan hệ tạo đúng DB, tên trùng trong file bị bỏ qua kèm cảnh báo `import_family.ambiguous`, không tạo nhầm quan hệ | — |
+| G12 🤖 | Panel người: thêm bố/mẹ, vợ/chồng, con + xóa quan hệ + viewer chỉ xem | Thêm/xóa đúng bảng relationships; viewer mở panel không thấy nút thêm/xóa | — |
+| G13 👤 | Upload avatar trong panel/hồ sơ | Ảnh hiện qua signed URL (Storage); người đã mất hiển thị avatar trắng đen (grayscale) trên thẻ cây | — |
+| G14 👤 | Thẻ cây màu theo đời + chú giải + chấm giỗ ≤30 ngày, xuất PNG/in | Dải màu đỉnh thẻ đúng theo đời, viền trái theo phía, chấm hổ phách khi giỗ ≤ `GIO_WARN_DAYS`; legend liệt kê đủ các đời có mặt; PNG/print khớp giao diện tương tác (cùng CARD_H/màu) | — |
+| G15 🤖 | Digest Telegram có mục "🕯 Giỗ sắp tới" (invoke tay `daily-digest`) | Mục hiện đúng khi có người giỗ ≤7 ngày, dòng "HÔM NAY" khi daysLeft=0; không lỗi khi DB chưa có cột giỗ âm lịch (trả `[]`, không vỡ các mục khác) | — |
+| G16 🤖 | `/so-do` chế độ Cây vẫn hoạt động với kích thước card mới (regression D2) | Cây 3 thế hệ vẫn đúng tầng, vợ chồng cùng hàng, không vỡ layout với NODE_W/CARD_H/ROW_H mới | — |
 
 ## Lưu ý khi viết test mới
 - Assert text: dùng so sánh **case-insensitive** (nhiều heading CSS `text-transform: uppercase`).

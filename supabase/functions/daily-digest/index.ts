@@ -8,6 +8,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { displayName, vnDateStr, vnNow } from '../_shared/normalize.ts'
+import { formatLunar, nextLunarAnniversary } from '../_shared/lunar.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -143,12 +144,76 @@ async function computeTasks(): Promise<TaskRow[]> {
 }
 
 // ---------------------------------------------------------------------
+// 4) Gio sap toi trong 7 ngay (am lich, xem supabase/functions/_shared/lunar.ts)
+// ---------------------------------------------------------------------
+interface GioItem {
+  person: PersonRow
+  daysLeft: number
+  lunarDay: number
+  lunarMonth: number
+  solarDay: number
+  solarMonth: number
+}
+
+// Boc toan bo trong try/catch — DB chua chay migration gia pha (thieu cot
+// death_lunar_day/death_lunar_month) se loi ngay o buoc select, khong duoc
+// de loi do lam vo ca digest (birthdays/cooling/tasks van phai gui binh
+// thuong).
+async function computeUpcomingGio(): Promise<GioItem[]> {
+  try {
+    const { data, error } = await supabase
+      .from('persons')
+      .select('id, full_name, nickname, death_lunar_day, death_lunar_month')
+      .not('death_lunar_day', 'is', null)
+
+    if (error) {
+      console.error('query gio loi', error.message)
+      return []
+    }
+
+    const { y, m, d } = todayYmd()
+    // Dung Date constructor "local" (khong phai getUTC*) vi
+    // nextLunarAnniversary (ban sao cua src/lib/lunar.ts) doc gio bang
+    // getter local — tu xay + tu doc cung 1 cach nen luon nhat quan bat ke
+    // timezone thuc su cua may chay Edge Function.
+    const from = new Date(y, m - 1, d)
+
+    const result: GioItem[] = []
+    for (const row of data as (PersonRow & {
+      death_lunar_day: number
+      death_lunar_month: number | null
+    })[]) {
+      if (row.death_lunar_month == null) continue // du lieu thieu thang — bo qua, khong tinh duoc
+      const next = nextLunarAnniversary(row.death_lunar_day, row.death_lunar_month, from)
+      const daysLeft = diffDaysFromToday(next.getFullYear(), next.getMonth() + 1, next.getDate())
+      if (daysLeft <= 7) {
+        result.push({
+          person: row,
+          daysLeft,
+          lunarDay: row.death_lunar_day,
+          lunarMonth: row.death_lunar_month,
+          solarDay: next.getDate(),
+          solarMonth: next.getMonth() + 1,
+        })
+      }
+    }
+
+    result.sort((a, b) => a.daysLeft - b.daysLeft)
+    return result
+  } catch (err) {
+    console.error('computeUpcomingGio loi', err)
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------
 // Soan noi dung tin nhan (HTML don gian, Telegram parse_mode: HTML)
 // ---------------------------------------------------------------------
 function composeMessage(
   birthdays: { person: PersonRow; daysLeft: number }[],
   cooling: { person: PersonRow; daysLeft: number }[],
   tasks: TaskRow[],
+  gio: GioItem[],
 ): string {
   const lines: string[] = ['<b>Điểm tin hôm nay</b>']
 
@@ -176,6 +241,16 @@ function composeMessage(
     for (const t of tasks) {
       const who = t.persons ? ` (${displayName(t.persons)})` : ''
       lines.push(`• ${t.title}${who} — hạn ${t.due_date}`)
+    }
+  }
+
+  if (gio.length) {
+    lines.push('')
+    lines.push('🕯 <b>Giỗ sắp tới</b>')
+    for (const g of gio) {
+      const when = g.daysLeft === 0 ? 'HÔM NAY' : `còn ${g.daysLeft} ngày`
+      const solar = `${String(g.solarDay).padStart(2, '0')}/${String(g.solarMonth).padStart(2, '0')}`
+      lines.push(`• ${displayName(g.person)} — ${formatLunar(g.lunarDay, g.lunarMonth)} ÂL (${solar}) — ${when}`)
     }
   }
 
@@ -265,20 +340,21 @@ Deno.serve(async (req) => {
       .maybeSingle()
     const warningDays = typeof warningRow?.value === 'number' ? warningRow.value : 7
 
-    const [birthdays, cooling, tasks] = await Promise.all([
+    const [birthdays, cooling, tasks, gio] = await Promise.all([
       computeBirthdays(),
       computeCooling(warningDays),
       computeTasks(),
+      computeUpcomingGio(),
     ])
 
-    if (birthdays.length === 0 && cooling.length === 0 && tasks.length === 0) {
+    if (birthdays.length === 0 && cooling.length === 0 && tasks.length === 0 && gio.length === 0) {
       return new Response(JSON.stringify({ sent: false }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
     }
 
-    const text = composeMessage(birthdays, cooling, tasks)
+    const text = composeMessage(birthdays, cooling, tasks, gio)
     const [telegramCount, emailSent] = await Promise.all([
       sendTelegramToApproved(text),
       sendEmailIfConfigured(text),

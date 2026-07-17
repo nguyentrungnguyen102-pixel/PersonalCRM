@@ -15,19 +15,27 @@
 //   dung foreignObject/img/class Tailwind, de serialize sach va khong bi
 //   "taint" canvas khi rasterize. Che do mac dinh (printMode falsy) giu
 //   NGUYEN VEN nhu truoc — /so-do khong truyen prop nay nen khong doi hanh vi.
-// - yearsOf: chi dung trong printMode — tra ve chuoi "1932–2001" (hoac null)
-//   de hien dong thu 2 cua the; khong truyen/tra null thi dong nay an luon
-//   (khac voi che do tuong tac luon hien nhan nhom).
+// - yearsOf: dong thu 2 cua the — "1932–2001" (hoac null). Dung o CA 2 che
+//   do (tuong tac + printMode); khong truyen/tra null thi che do tuong tac
+//   fallback ve nhan nhom (nhu truoc), printMode an luon dong nay.
+// - gioSoonIds: nguoi co ngay gio trong nguong canh bao (xem GIO_WARN_DAYS o
+//   GiaPha.tsx) — hien 1 cham mau hoi (amber) o goc tren-phai the (chi che
+//   do tuong tac, khong dung trong printMode).
+//
+// Kieu the (ap dung ca 2 che do /gia-pha va /so-do, KHONG co variant prop —
+// 1 kieu duy nhat, xem ke hoach Dot 3): dai mau THEO DOI (genColor, xem
+// treeDisplay.ts) o VIEN TREN 4px; vien TRAI 3px van la mau "phia"
+// (sideColor, /gia-pha) neu co.
 
 import { useLabels } from '../../hooks/useSettings'
 import { displayName as personDisplayName } from '../../lib/displayName'
 import type { FamilyLayoutEdge, FamilyLayoutNode } from '../../lib/familyLayout'
-import { NODE_W } from '../../lib/familyLayout'
+import { CARD_H, NODE_W } from '../../lib/familyLayout'
 import type { FamilySide } from '../../lib/familyLayout'
 import type { GroupType } from '../../lib/types'
 import { Avatar } from '../Avatar'
 import { GROUP_COLORS } from '../PersonCard'
-import { FAMILY_SIDE_COLORS, initialsOf, truncateName } from './treeDisplay'
+import { FAMILY_SIDE_COLORS, genColor, initialsOf, truncateName } from './treeDisplay'
 
 export interface FamilyTreeSvgPerson {
   nickname: string | null
@@ -46,6 +54,7 @@ interface FamilyTreeSvgProps<P extends FamilyTreeSvgPerson> {
   onSelectPerson?: (id: string) => void
   printMode?: boolean
   yearsOf?: (id: string) => string | null
+  gioSoonIds?: Set<string>
 }
 
 export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
@@ -58,10 +67,11 @@ export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
   onSelectPerson,
   printMode = false,
   yearsOf,
+  gioSoonIds,
 }: FamilyTreeSvgProps<P>) {
   const { t } = useLabels()
   const cardW = NODE_W
-  const cardH = 58
+  const cardH = CARD_H
 
   return (
     <>
@@ -139,11 +149,14 @@ export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
         const deceased = deceasedIds?.has(n.id) ?? false
 
         if (printMode) {
-          const avatarR = 15
+          const avatarR = 18
           const avatarCx = n.x + 6 + avatarR
           const avatarCy = n.y + cardH / 2
           const textX = avatarCx + avatarR + 6
           const years = yearsOf?.(n.id) ?? null
+          const genBandH = 4
+          const nameY = n.y + (years ? cardH / 2 - 9 : cardH / 2 + 3)
+          const yearsY = n.y + cardH / 2 + 10
           return (
             <g key={n.id}>
               <rect
@@ -156,7 +169,10 @@ export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
                 stroke={`${color}55`}
                 strokeWidth={1}
               />
-              {sideColor && <rect x={n.x} y={n.y} width={cardW} height={3} fill={sideColor} />}
+              <rect x={n.x} y={n.y} width={cardW} height={genBandH} fill={genColor(n.gen)} />
+              {sideColor && (
+                <rect x={n.x} y={n.y + genBandH} width={cardW} height={3} fill={sideColor} />
+              )}
               <circle cx={avatarCx} cy={avatarCy} r={avatarR} fill="#1f1116" />
               <text
                 x={avatarCx}
@@ -169,17 +185,11 @@ export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
               >
                 {initialsOf(name)}
               </text>
-              <text
-                x={textX}
-                y={n.y + (years ? 23 : cardH / 2 + 3)}
-                fontSize={10}
-                fontWeight={600}
-                fill={deceased ? '#9c8f85' : '#f5ede4'}
-              >
+              <text x={textX} y={nameY} fontSize={10} fontWeight={600} fill={deceased ? '#9c8f85' : '#f5ede4'}>
                 {deceased ? `🕯 ${truncateName(name)}` : truncateName(name)}
               </text>
               {years && (
-                <text x={textX} y={n.y + 36} fontSize={8} fill="#9c8f85">
+                <text x={textX} y={yearsY} fontSize={8} fill="#9c8f85">
                   {years}
                 </text>
               )}
@@ -187,33 +197,41 @@ export function FamilyTreeSvg<P extends FamilyTreeSvgPerson>({
           )
         }
 
+        const line2 = yearsOf?.(n.id) || t(`groups.${person.group_type}`)
+        const gioSoon = gioSoonIds?.has(n.id) ?? false
+
         return (
           <foreignObject key={n.id} x={n.x} y={n.y} width={cardW} height={cardH}>
             <div
               style={{
                 borderColor: `${color}55`,
                 background: 'rgba(255,248,240,0.03)',
-                ...(sideColor
-                  ? { borderTopColor: sideColor, borderTopWidth: 3 }
-                  : undefined),
+                borderTopColor: genColor(n.gen),
+                borderTopWidth: 4,
+                ...(sideColor ? { borderLeftColor: sideColor, borderLeftWidth: 3 } : undefined),
               }}
               onClick={onSelectPerson ? () => onSelectPerson(n.id) : undefined}
               className={
                 onSelectPerson
-                  ? 'flex h-full w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border px-1.5 py-1'
-                  : 'flex h-full w-full items-center gap-1.5 overflow-hidden rounded-lg border px-1.5 py-1'
+                  ? 'relative flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5'
+                  : 'relative flex h-full w-full items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5'
               }
               title={name}
             >
-              <Avatar name={name} avatarUrl={person.avatar_url} size={30} />
+              {gioSoon && (
+                <span
+                  aria-hidden
+                  className="absolute top-1 right-1 h-[7px] w-[7px] rounded-full"
+                  style={{ background: '#fbbf24' }}
+                />
+              )}
+              <Avatar name={name} avatarUrl={person.avatar_url} size={40} grayscale={deceased} />
               <div className="min-w-0 flex-1">
-                <div
-                  className={`truncate text-[10px] font-semibold ${deceased ? 'text-muted' : 'text-ink'}`}
-                >
+                <div className={`truncate text-xs font-semibold ${deceased ? 'text-muted' : 'text-ink'}`}>
                   {deceased && <span aria-hidden>🕯 </span>}
                   {truncateName(name)}
                 </div>
-                <div className="truncate text-[8px] text-muted">{t(`groups.${person.group_type}`)}</div>
+                <div className="truncate text-[10px] text-muted">{line2}</div>
               </div>
             </div>
           </foreignObject>

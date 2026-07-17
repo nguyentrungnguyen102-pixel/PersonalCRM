@@ -40,9 +40,10 @@ const GEN_DELTA_A_TO_B: Record<string, number> = {
   ong_ba_chau: 2,
 }
 
-export const NODE_W = 120
+export const NODE_W = 150
+export const CARD_H = 76
 export const GAP = 40
-export const ROW_H = 130
+export const ROW_H = 150
 const SLOT = NODE_W + GAP
 
 export interface FamilyLayoutNode {

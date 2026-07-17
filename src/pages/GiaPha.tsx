@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { FamilyTreeSvg } from '../components/diagram/FamilyTreeSvg'
-import { FAMILY_SIDE_COLORS } from '../components/diagram/treeDisplay'
+import { FAMILY_SIDE_COLORS, genColor } from '../components/diagram/treeDisplay'
 import { usePanZoom } from '../components/diagram/usePanZoom'
 import { FamilyMemberPicker } from '../components/giapha/FamilyMemberPicker'
 import { PersonPanel } from '../components/giapha/PersonPanel'
@@ -20,7 +20,13 @@ import { usePersons } from '../hooks/usePersons'
 import type { PersonWithMeta } from '../hooks/usePersons'
 import { useLabels } from '../hooks/useSettings'
 import { displayName as personDisplayName } from '../lib/displayName'
-import { computeFamilySides, FAMILY_RELATION_TYPES, layoutFamilyTree, NODE_W } from '../lib/familyLayout'
+import {
+  CARD_H,
+  computeFamilySides,
+  FAMILY_RELATION_TYPES,
+  layoutFamilyTree,
+  NODE_W,
+} from '../lib/familyLayout'
 import type { FamilyLayoutNode, FamilySide } from '../lib/familyLayout'
 import { daysUntil, formatLunar, nextLunarAnniversary } from '../lib/lunar'
 import { vnNormalize } from '../lib/normalize'
@@ -29,16 +35,19 @@ import { supabase } from '../lib/supabase'
 import { exportSvgToPng } from '../lib/svgExport'
 
 const ROOT_KEY = 'personalcrm.giapha.root'
+const INVITE_DISMISS_KEY = 'personalcrm.giapha.invite_dismissed'
 const GIO_WITHIN_DAYS = 60
 const GIO_WARN_DAYS = 30
-// Phai khop cardH (58) khai bao trong FamilyTreeSvg.tsx — dung de tinh
-// kich thuoc svg xuat/in bao trum toan bo cay (xem treeExportSize duoi day).
-const EXPORT_CARD_H = 58
 const EXPORT_PADDING = 32
 
 function loadStoredRoot(): string | null {
   if (typeof window === 'undefined') return null
   return window.localStorage.getItem(ROOT_KEY)
+}
+
+function loadInviteDismissed(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(INVITE_DISMISS_KEY) === '1'
 }
 
 function yearOf(dateStr: string | null): number | null {
@@ -121,7 +130,7 @@ function MemberRow({ person, canEdit, onOpen, onRemove }: MemberRowProps) {
 
 export function GiaPha() {
   const { t } = useLabels()
-  const { canEdit } = useAuth()
+  const { canEdit, role } = useAuth()
   const navigate = useNavigate()
 
   const { persons, loading: personsLoading, refresh } = usePersons()
@@ -134,6 +143,7 @@ export function GiaPha() {
   const [showPicker, setShowPicker] = useState(false)
   const [showAllGio, setShowAllGio] = useState(false)
   const [panelPersonId, setPanelPersonId] = useState<string | null>(null)
+  const [inviteDismissed, setInviteDismissed] = useState(loadInviteDismissed)
 
   const [removeTarget, setRemoveTarget] = useState<PersonWithMeta | null>(null)
   const [removing, setRemoving] = useState(false)
@@ -257,6 +267,14 @@ export function GiaPha() {
     return map
   }, [tree.nodes])
 
+  // Doi (generation) duy nhat co mat trong cay, sap tang dan — dung cho hang
+  // chu thich mau theo doi duoi cay (xem GEN_COLORS/genColor trong
+  // treeDisplay.ts).
+  const presentGenerations = useMemo(
+    () => Array.from(new Set(tree.nodes.map((n) => n.gen))).sort((a, b) => a - b),
+    [tree.nodes],
+  )
+
   const deceasedIds = useMemo(() => {
     const set = new Set<string>()
     for (const p of familyPersons) {
@@ -346,6 +364,13 @@ export function GiaPha() {
   const visibleGio = showAllGio ? upcomingGio : withinRangeGio
   const hasMoreGio = upcomingGio.length > withinRangeGio.length
 
+  // Cham bao gio tren the cay — nguoi co gio trong nguong canh bao
+  // (GIO_WARN_DAYS), xem prop gioSoonIds cua FamilyTreeSvg.
+  const gioSoonIds = useMemo(
+    () => new Set(upcomingGio.filter((x) => x.days <= GIO_WARN_DAYS).map((x) => x.person.id)),
+    [upcomingGio],
+  )
+
   // --- Xuat anh PNG / In ------------------------------------------------------
   // Dung chung cho ca svg xuat (offscreen) va svg in (hien khi printing) —
   // xem src/components/diagram/FamilyTreeSvg.tsx (prop yearsOf, chi dung o
@@ -366,7 +391,7 @@ export function GiaPha() {
     const maxY = Math.max(...tree.nodes.map((n) => n.y))
     return {
       width: maxX + NODE_W + EXPORT_PADDING,
-      height: maxY + EXPORT_CARD_H + EXPORT_PADDING,
+      height: maxY + CARD_H + EXPORT_PADDING,
     }
   }, [tree.nodes])
 
@@ -406,6 +431,15 @@ export function GiaPha() {
     setRootId(id)
     setShowRootPicker(false)
     setRootQuery('')
+  }
+
+  function dismissInvite() {
+    setInviteDismissed(true)
+    try {
+      window.localStorage.setItem(INVITE_DISMISS_KEY, '1')
+    } catch {
+      // localStorage khong kha dung — bo qua im lang
+    }
   }
 
   async function handleConfirmRemove() {
@@ -510,6 +544,29 @@ export function GiaPha() {
         </div>
       </div>
 
+      {role === 'admin' && !inviteDismissed && (
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-card border border-primary/20 bg-primary/5 px-4 py-2.5">
+          <p className="text-xs text-ink">{t('giapha.invite_hint')}</p>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/cai-dat')}
+              className="rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[10px] font-semibold text-primary"
+            >
+              {t('giapha.invite_cta')}
+            </button>
+            <button
+              type="button"
+              onClick={dismissInvite}
+              aria-label="Đóng"
+              className="rounded-md p-1 text-muted transition-colors hover:text-ink"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {familyPersons.length === 0 && (
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 rounded-card border border-line bg-card px-6 text-center">
           <p className="text-sm text-muted">{t('giapha.empty')}</p>
@@ -567,6 +624,8 @@ export function GiaPha() {
                     sideOf={sideOf}
                     deceasedIds={deceasedIds}
                     onSelectPerson={(id) => setPanelPersonId(id)}
+                    yearsOf={yearsOf}
+                    gioSoonIds={gioSoonIds}
                   />
                 </g>
               </svg>
@@ -604,6 +663,15 @@ export function GiaPha() {
                 {hasChungSide && <LegendChip color={FAMILY_SIDE_COLORS.chung} label={t('giapha.side_chung')} />}
               </div>
             )}
+
+            {presentGenerations.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] text-muted">{t('giapha.gen_legend')}:</span>
+                {presentGenerations.map((gen) => (
+                  <LegendChip key={gen} color={genColor(gen)} label={`${t('giapha.generation')} ${gen + 1}`} />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Ban sao cay o che do printMode, dat ngoai man hinh — chi de
@@ -627,6 +695,7 @@ export function GiaPha() {
               sideOf={sideOf}
               deceasedIds={deceasedIds}
               yearsOf={yearsOf}
+              gioSoonIds={gioSoonIds}
             />
           </svg>
 
@@ -645,6 +714,7 @@ export function GiaPha() {
                   sideOf={sideOf}
                   deceasedIds={deceasedIds}
                   yearsOf={yearsOf}
+                  gioSoonIds={gioSoonIds}
                 />
               </svg>
             </div>

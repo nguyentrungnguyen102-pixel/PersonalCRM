@@ -27,3 +27,22 @@ export const FAMILY_SIDE_COLORS: Record<FamilySide, string> = {
   b: '#fb7185',
   chung: '#34d399',
 }
+
+// Mau theo "doi" (generation) — dai chu ky qua modulo, dung cho dai mau tren
+// dinh the (FamilyTreeSvg) va legend o trang /gia-pha. `gen` da duoc chuan
+// hoa 0..n boi layoutFamilyTree (xem src/lib/familyLayout.ts, buoc 5).
+export const GEN_COLORS = [
+  '#f97316',
+  '#38bdf8',
+  '#34d399',
+  '#fbbf24',
+  '#a78bfa',
+  '#fb7185',
+  '#2dd4bf',
+  '#f472b6',
+]
+
+export function genColor(gen: number): string {
+  const idx = ((gen % GEN_COLORS.length) + GEN_COLORS.length) % GEN_COLORS.length
+  return GEN_COLORS[idx]
+}
