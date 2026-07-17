@@ -1,9 +1,11 @@
 // Logic thuan (khong React) cho wizard nhap CSV Google Contacts — tach rieng
 // de test duoc doc lap voi UI. Xem src/pages/ImportCsv.tsx cho phan giao dien.
 
-import { parse } from 'papaparse'
-import { supabase } from './supabase'
-import { vnNormalize } from './normalize'
+// import mac dinh (khong phai { parse }) — papaparse la goi CommonJS, Node
+// ESM thuan (vd scripts/*.test.ts chay bang node:test) chi nhan dien duoc
+// export mac dinh, khong suy ra duoc named export 'parse' nhu bundler/esbuild.
+import Papa from 'papaparse'
+import { vnNormalize } from './normalize.ts'
 import type { GroupType } from './types'
 
 // ---------------------------------------------------------------------
@@ -39,6 +41,19 @@ export interface MappedPerson {
   hobbies: string[]
   preferences: Record<string, string>
   social_links: Record<string, string>
+  // --- Cac truong gia pha, chi dung boi wizard nhap Excel gia pha (xem
+  // src/lib/importFamily.ts) — optional vi CSV/LinkedIn import (mapRow /
+  // mapLinkedInRow) khong dung toi, de khong pha vo cac ham do.
+  in_family_tree?: boolean
+  gender?: 'nam' | 'nu' | null
+  birth_year?: number | null
+  death_date?: string | null
+  death_year?: number | null
+  death_lunar_day?: number | null
+  death_lunar_month?: number | null
+  hometown?: string | null
+  burial_place?: string | null
+  biography?: string | null
 }
 
 // Tap con cac cot cua persons dung de doi chieu trung lap.
@@ -52,7 +67,9 @@ export interface ExistingPerson {
 
 export interface DedupeUpdate {
   id: string
-  patch: Partial<Pick<MappedPerson, 'phone' | 'email' | 'birthday'>>
+  // in_family_tree: chi wizard gia pha dung (danh dau nguoi da co san trong
+  // danh ba la thanh vien dong ho khi file Excel khop trung ho).
+  patch: Partial<Pick<MappedPerson, 'phone' | 'email' | 'birthday' | 'in_family_tree'>>
 }
 
 export interface DedupePlan {
@@ -65,6 +82,11 @@ export interface RunImportResult {
   inserted: number
   updated: number
   failed: { name: string; reason: string }[]
+  // Id cua tung ban ghi da insert, CUNG THU TU voi plan.inserts (null o vi tri
+  // that bai) — wizard gia pha (importFamily.ts) dung mang nay de anh xa
+  // rowIndex -> personId roi tao quan he. ImportCsv.tsx (danh ba thuong)
+  // khong dung toi truong nay.
+  insertedIds: (string | null)[]
 }
 
 // ---------------------------------------------------------------------
@@ -110,7 +132,7 @@ export function parseContactsCsv(file: File): Promise<ParseResult> {
     (text) =>
       new Promise<ParseResult>((resolve, reject) => {
         const cleaned = stripPreambleLines(text)
-        parse<RawRow>(cleaned, {
+        Papa.parse<RawRow>(cleaned, {
           header: true,
           skipEmptyLines: true,
           complete: (results) => {
@@ -386,26 +408,46 @@ export async function runImport(
   plan: DedupePlan,
   onProgress?: (done: number, total: number) => void,
 ): Promise<RunImportResult> {
+  // Import dong (khong o dau file): './supabase' doc import.meta.env, chi co
+  // gia tri duoi Vite — import tinh o dau file se lam moi module import
+  // importCsv.ts (vd script test node:test cua wizard gia pha) crash ngay
+  // luc load, du khong goi runImport(). Cac ham thuan (parseContactsCsv,
+  // mapRow, dedupePlan, findMatchingExisting...) khong dung supabase nen
+  // khong bi anh huong.
+  const { supabase } = await import('./supabase.ts')
+
   const total = plan.inserts.length + plan.updates.length
   let done = 0
   let inserted = 0
   let updated = 0
   const failed: { name: string; reason: string }[] = []
+  // Cung do dai voi plan.inserts, gan dan theo vi tri — null o cho insert that bai.
+  const insertedIds: (string | null)[] = new Array(plan.inserts.length).fill(null)
 
   for (let i = 0; i < plan.inserts.length; i += CHUNK_SIZE) {
     const chunk = plan.inserts.slice(i, i + CHUNK_SIZE)
-    const { error } = await supabase.from('persons').insert(chunk)
+    const { data, error } = await supabase.from('persons').insert(chunk).select('id')
 
-    if (!error) {
+    if (!error && data) {
       inserted += chunk.length
+      data.forEach((row, j) => {
+        insertedIds[i + j] = (row as { id: string }).id
+      })
     } else {
-      // Chunk loi: thu lai tung dong de biet chinh xac dong nao that bai.
-      for (const person of chunk) {
-        const { error: rowError } = await supabase.from('persons').insert([person])
-        if (rowError) {
-          failed.push({ name: person.full_name, reason: rowError.message })
+      // Chunk loi: thu lai tung dong de biet chinh xac dong nao that bai VA
+      // lay id cua tung dong thanh cong.
+      for (let j = 0; j < chunk.length; j++) {
+        const person = chunk[j]
+        const { data: rowData, error: rowError } = await supabase
+          .from('persons')
+          .insert([person])
+          .select('id')
+          .single()
+        if (rowError || !rowData) {
+          failed.push({ name: person.full_name, reason: rowError?.message ?? 'unknown error' })
         } else {
           inserted += 1
+          insertedIds[i + j] = (rowData as { id: string }).id
         }
       }
     }
@@ -434,5 +476,5 @@ export async function runImport(
     onProgress?.(done, total)
   }
 
-  return { inserted, updated, failed }
+  return { inserted, updated, failed, insertedIds }
 }

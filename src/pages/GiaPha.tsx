@@ -483,6 +483,16 @@ export function GiaPha() {
           {canEdit && (
             <button
               type="button"
+              onClick={() => navigate('/nhap-gia-pha')}
+              className="rounded-lg border border-line bg-card px-3 py-2 text-xs font-medium text-ink transition-colors hover:border-primary/30"
+            >
+              {t('giapha.import_excel')}
+            </button>
+          )}
+
+          {canEdit && (
+            <button
+              type="button"
               onClick={() => setShowPicker(true)}
               className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary"
             >
