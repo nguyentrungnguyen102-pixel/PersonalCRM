@@ -14,6 +14,10 @@ export default defineConfig({
             // import, KHONG gop vao 'vendor' (vendor duoc modulepreload tren
             // moi trang, se lam mat tac dung lazy-load).
             if (id.includes('tesseract.js')) return 'tesseract'
+            // xlsx (SheetJS) chi duoc dynamic import() tu wizard nhap gia pha
+            // (doc file .xlsx) — cung ly do voi tesseract o tren, phai tach
+            // rieng khoi 'vendor' de khong bi modulepreload tren moi trang.
+            if (id.includes('xlsx')) return 'xlsx'
             if (id.includes('@supabase')) return 'supabase'
             return 'vendor'
           }

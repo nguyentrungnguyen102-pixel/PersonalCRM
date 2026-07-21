@@ -18,6 +18,7 @@ import { Reminders } from './pages/Reminders'
 import { Settings } from './pages/Settings'
 
 const GiaPha = lazy(() => import('./pages/GiaPha'))
+const ImportGiaPha = lazy(() => import('./pages/ImportGiaPha'))
 
 function SuspenseFallback() {
   return (
@@ -87,6 +88,14 @@ function AppRoutes() {
           element={
             <Suspense fallback={<SuspenseFallback />}>
               <GiaPha />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/nhap-gia-pha"
+          element={
+            <Suspense fallback={<SuspenseFallback />}>
+              <ImportGiaPha />
             </Suspense>
           }
         />

@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { cachedAvatarUrl, resolveAvatarUrl } from '../lib/avatarUrl'
 
 const PALETTE = ['#f97316', '#fb7185', '#fbbf24', '#34d399', '#a78bfa', '#38bdf8']
 
@@ -31,17 +33,45 @@ interface AvatarProps {
   avatarUrl?: string | null
   size?: number
   className?: string
+  // Lam anh xam + mo nhe — dung danh dau nguoi da mat trong PersonPanel.tsx
+  // (gia pha).
+  grayscale?: boolean
 }
 
-export function Avatar({ name, avatarUrl, size = 40, className = '' }: AvatarProps) {
+export function Avatar({ name, avatarUrl, size = 40, className = '', grayscale = false }: AvatarProps) {
   const color = colorForName(name)
 
-  if (avatarUrl) {
+  // avatarUrl co the la URL http(s) day du HOAC storage path (bucket
+  // 'media') can ky signed URL — xem src/lib/avatarUrl.ts. Khoi tao dong bo
+  // tu cache de tranh nhap nhay, roi resolve bat dong bo neu chua co san.
+  const [src, setSrc] = useState<string | null>(() => cachedAvatarUrl(avatarUrl ?? null))
+
+  useEffect(() => {
+    let active = true
+    const value = avatarUrl ?? null
+    const cached = cachedAvatarUrl(value)
+    setSrc(cached)
+    if (cached || !value) return
+
+    resolveAvatarUrl(value).then((url) => {
+      if (active) setSrc(url)
+    })
+
+    return () => {
+      active = false
+    }
+  }, [avatarUrl])
+
+  if (src) {
     return (
       <img
-        src={avatarUrl}
+        src={src}
         alt={name}
-        style={{ width: size, height: size }}
+        style={{
+          width: size,
+          height: size,
+          ...(grayscale ? { filter: 'grayscale(1) opacity(0.85)' } : undefined),
+        }}
         className={`flex-shrink-0 rounded-full object-cover ${className}`}
       />
     )

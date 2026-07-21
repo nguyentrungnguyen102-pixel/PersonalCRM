@@ -47,6 +47,10 @@ export interface Person {
   death_lunar_month: number | null
   burial_place: string | null
   biography: string | null
+  // Nam gan dung (chi dung khi khong co ngay day du) — xem migration
+  // 20260801100000_v21_life_events.sql.
+  birth_year: number | null
+  death_year: number | null
   notes: string | null
   created_by: string
   created_at: string

@@ -4,13 +4,12 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useSettings } from '../hooks/useSettings'
+import { compressImage } from '../lib/imageCompress'
 import { vnNormalize } from '../lib/normalize'
 import { supabase } from '../lib/supabase'
 import { Modal } from './Modal'
 
 const MAX_BYTES = 5 * 1024 * 1024
-const MAX_EDGE = 1920
-const JPEG_QUALITY = 0.82
 
 interface MediaAddModalProps {
   open: boolean
@@ -25,26 +24,6 @@ function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
   return slug || 'anh'
-}
-
-async function compressImage(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file)
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
-  const width = Math.round(bitmap.width * scale)
-  const height = Math.round(bitmap.height * scale)
-
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Không thể xử lý ảnh')
-  ctx.drawImage(bitmap, 0, 0, width, height)
-
-  const blob: Blob | null = await new Promise((resolve) =>
-    canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY),
-  )
-  if (!blob) throw new Error('Không thể nén ảnh')
-  return blob
 }
 
 function extractHost(url: string): string | null {
