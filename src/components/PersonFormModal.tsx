@@ -15,19 +15,6 @@ import { Modal } from './Modal'
 const GROUP_TYPES: GroupType[] = ['gia_dinh', 'ban_be', 'doi_tac', 'dong_nghiep', 'con_cai', 'khac']
 const FREQ_OPTIONS: (number | null)[] = [null, 30, 60, 90, 180]
 const GENDER_OPTIONS: ('nam' | 'nu' | null)[] = [null, 'nam', 'nu']
-// 7 truong gia pha trong payload — dung cho lop tuong thich DB chua nang cap
-// (xem retry trong handleSubmit). Phai khop migration 20260716100000.
-const GIAPHA_PAYLOAD_KEYS = [
-  'in_family_tree',
-  'gender',
-  'death_date',
-  'death_lunar_day',
-  'death_lunar_month',
-  'burial_place',
-  'biography',
-] as const
-const GIAPHA_COLUMN_RE =
-  /in_family_tree|death_lunar_day|death_lunar_month|death_date|burial_place|biography|gender/
 const LUNAR_DAY_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1)
 const LUNAR_MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -307,31 +294,10 @@ export function PersonFormModal({ open, person, initialValues, onClose, onSaved 
       biography: form.biography.trim() || null,
     }
 
-    let result =
+    const result =
       isEdit && person
         ? await supabase.from('persons').update(payload).eq('id', person.id)
         : await supabase.from('persons').insert(payload)
-
-    // TUONG THICH DB CHUA NANG CAP (tam thoi — thanh dead-code vo hai sau khi
-    // migration 20260716100000_giapha_persons.sql duoc ap, go o dot don sau):
-    // neu DB live CHUA co 7 cot gia pha, PostgREST tra loi "Could not find
-    // the '<cot>' column" (PGRST204) → retry 1 lan voi payload BO 7 truong
-    // gia pha de thao tac Them/Sua person cu khong bi hong; bao nhe cho
-    // nguoi dung biet phan gia pha chua luu duoc.
-    if (result.error && GIAPHA_COLUMN_RE.test(result.error.message)) {
-      const legacyPayload = { ...payload } as Record<string, unknown>
-      for (const key of GIAPHA_PAYLOAD_KEYS) delete legacyPayload[key]
-      result =
-        isEdit && person
-          ? await supabase.from('persons').update(legacyPayload).eq('id', person.id)
-          : await supabase.from('persons').insert(legacyPayload)
-      if (!result.error) {
-        setSaving(false)
-        setError(t('person.giapha_not_migrated'))
-        onSaved()
-        return
-      }
-    }
 
     setSaving(false)
 
